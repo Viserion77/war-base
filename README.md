@@ -1,7 +1,7 @@
 # war-base
 O projeto é um jogo, onde o conceito seria guerra entre bases.
 
-[[https://github.com/desenjeferson/war-base/blob/develop/fluxograma.png|alt=octocat]]
+![Screenshot](fluxograma.png)
 
 Construções
 ===============================
