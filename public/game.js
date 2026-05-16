@@ -87,7 +87,9 @@ export default function createGame() {
         for (const playerId in players) {
             const player = players[playerId]
             const {x,y} = player
-            const distance = Math.sqrt((coords.x - x) * (coords.y-y));
+            const dx = coords.x - x
+            const dy = coords.y - y
+            const distance = Math.sqrt(dx * dx + dy * dy)
             if(distance <= maxCollisionDistance)
                 playersAround.push(playerId)              
         }
