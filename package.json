@@ -16,8 +16,8 @@
   "license": "MIT",
   "homepage": "https://github.com/desenjeferson/war-base#readme",
   "dependencies": {
-    "express": "^4.21.2",
-    "nodemon": "^2.0.2",
+    "express": "^5.2.1",
+    "nodemon": "^3.1.14",
     "socket.io": "^4.8.0"
   }
 }
