@@ -4,172 +4,522 @@ export function setupScreen(canvas, game) {
     canvas.height = height * pixelsPerFields
 }
 
-export default function renderScreen(screen, scoreTable, game, requestAnimationFrame, currentPlayerId, icons_gameImg) {
+export function getTileFromCanvasEvent(event, canvas, game) {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    const x = Math.floor((event.clientX - rect.left) * scaleX / game.state.screen.pixelsPerFields)
+    const y = Math.floor((event.clientY - rect.top) * scaleY / game.state.screen.pixelsPerFields)
+
+    return { x, y }
+}
+
+export function getStructureAt(state, x, y) {
+    return Object.values(state.structures || {}).find(structure => structure.x === x && structure.y === y) || null
+}
+
+export default function renderScreen(screen, hud, game, requestAnimationFrame, currentPlayerId, uiState) {
     const context = screen.getContext('2d')
-    context.fillStyle = 'white'
     const { screen: { width, height, pixelsPerFields } } = game.state
+
     context.clearRect(0, 0, width * pixelsPerFields, height * pixelsPerFields)
+    drawTerrain(context, game)
+    drawSelection(context, game, uiState)
+    drawRanges(context, game, uiState)
+    drawStructures(context, game)
+    drawUnits(context, game)
+    drawPlayers(context, game, currentPlayerId)
+    updateHud(hud, game, currentPlayerId, uiState)
+
+    requestAnimationFrame(() => {
+        renderScreen(screen, hud, game, requestAnimationFrame, currentPlayerId, uiState)
+    })
+}
+
+function drawTerrain(context, game) {
+    const { screen: { width, height, pixelsPerFields } } = game.state
+    const canvasWidth = width * pixelsPerFields
+    const canvasHeight = height * pixelsPerFields
+
+    context.fillStyle = '#f4efe4'
+    context.fillRect(0, 0, canvasWidth, canvasHeight)
+
+    context.fillStyle = '#e8dcc4'
+    for (let y = 0; y < height; y += 2) {
+        for (let x = (y % 4 === 0 ? 0 : 1); x < width; x += 4) {
+            context.fillRect(x * pixelsPerFields, y * pixelsPerFields, pixelsPerFields, pixelsPerFields)
+        }
+    }
+
+    context.strokeStyle = 'rgba(60, 52, 42, 0.12)'
+    context.lineWidth = 1
+
+    for (let x = 0; x <= width; x += 1) {
+        context.beginPath()
+        context.moveTo(x * pixelsPerFields + 0.5, 0)
+        context.lineTo(x * pixelsPerFields + 0.5, canvasHeight)
+        context.stroke()
+    }
+
+    for (let y = 0; y <= height; y += 1) {
+        context.beginPath()
+        context.moveTo(0, y * pixelsPerFields + 0.5)
+        context.lineTo(canvasWidth, y * pixelsPerFields + 0.5)
+        context.stroke()
+    }
+}
+
+function drawSelection(context, game, uiState) {
+    if (!uiState.selectedTile) {
+        return
+    }
+
+    const { pixelsPerFields } = game.state.screen
+    const x = uiState.selectedTile.x * pixelsPerFields
+    const y = uiState.selectedTile.y * pixelsPerFields
+
+    context.save()
+    context.strokeStyle = '#f6bd16'
+    context.lineWidth = 2
+    context.strokeRect(x + 2, y + 2, pixelsPerFields - 4, pixelsPerFields - 4)
+    context.restore()
+}
+
+function drawRanges(context, game, uiState) {
+    const selectedStructure = getSelectedStructure(game.state, uiState)
+
+    if (!selectedStructure) {
+        return
+    }
+
+    const catalog = game.state.catalog.structures[selectedStructure.type]
+    const range = catalog.attackRange || game.state.config.captureRange
+    const { pixelsPerFields } = game.state.screen
+
+    context.save()
+    context.fillStyle = selectedStructure.ownerId ? 'rgba(27, 154, 170, 0.08)' : 'rgba(120, 120, 120, 0.10)'
+    context.strokeStyle = selectedStructure.ownerId ? 'rgba(27, 154, 170, 0.26)' : 'rgba(120, 120, 120, 0.32)'
+    context.beginPath()
+    context.arc(
+        (selectedStructure.x + 0.5) * pixelsPerFields,
+        (selectedStructure.y + 0.5) * pixelsPerFields,
+        range * pixelsPerFields,
+        0,
+        Math.PI * 2,
+    )
+    context.fill()
+    context.stroke()
+    context.restore()
+}
+
+function drawStructures(context, game) {
+    const structures = Object.values(game.state.structures || {})
+        .sort((first, second) => getStructureWeight(first.type) - getStructureWeight(second.type))
+
+    for (const structure of structures) {
+        drawStructure(context, game, structure)
+    }
+}
+
+function drawStructure(context, game, structure) {
+    const { pixelsPerFields } = game.state.screen
+    const x = structure.x * pixelsPerFields
+    const y = structure.y * pixelsPerFields
+    const owner = game.state.players[structure.ownerId]
+    const color = structure.disabled ? '#8c8c8c' : owner ? owner.color : '#9b8a70'
+    const padding = Math.max(2, pixelsPerFields * 0.12)
+    const size = pixelsPerFields - padding * 2
+
+    context.save()
+    context.globalAlpha = structure.disabled ? 0.68 : 1
+    context.lineWidth = 1.5
+    context.strokeStyle = '#25221f'
+    context.fillStyle = color
+
+    if (structure.type === 'base') {
+        drawBase(context, x + padding, y + padding, size, color)
+    } else if (structure.type === 'cover') {
+        drawCover(context, x + padding, y + padding, size, color)
+    } else if (structure.type === 'taraque') {
+        drawTaraque(context, x + padding, y + padding, size, color)
+    } else if (structure.type === 'per') {
+        drawPer(context, x + padding, y + padding, size, color)
+    } else if (structure.type === 'hef') {
+        drawHef(context, x + padding, y + padding, size, color)
+    } else if (structure.type === 'tujai') {
+        drawTujai(context, x + padding, y + padding, size, color)
+    }
+
+    if (structure.disabled) {
+        context.strokeStyle = '#2f2a25'
+        context.beginPath()
+        context.moveTo(x + 4, y + 4)
+        context.lineTo(x + pixelsPerFields - 4, y + pixelsPerFields - 4)
+        context.moveTo(x + pixelsPerFields - 4, y + 4)
+        context.lineTo(x + 4, y + pixelsPerFields - 4)
+        context.stroke()
+    }
+
+    drawBars(context, x, y, pixelsPerFields, structure)
+    drawCaptureProgress(context, game, structure, x, y)
+    context.restore()
+}
+
+function drawBase(context, x, y, size, color) {
+    context.fillStyle = color
+    context.fillRect(x, y + size * 0.25, size, size * 0.75)
+    context.fillRect(x + size * 0.12, y, size * 0.18, size * 0.32)
+    context.fillRect(x + size * 0.41, y, size * 0.18, size * 0.32)
+    context.fillRect(x + size * 0.70, y, size * 0.18, size * 0.32)
+    context.strokeRect(x, y + size * 0.25, size, size * 0.75)
+}
+
+function drawCover(context, x, y, size, color) {
+    context.fillStyle = color
+    context.beginPath()
+    context.moveTo(x + size * 0.5, y)
+    context.lineTo(x + size, y + size * 0.5)
+    context.lineTo(x + size * 0.5, y + size)
+    context.lineTo(x, y + size * 0.5)
+    context.closePath()
+    context.fill()
+    context.stroke()
+    context.fillStyle = '#2f2a25'
+    context.fillRect(x + size * 0.36, y + size * 0.36, size * 0.28, size * 0.28)
+}
+
+function drawTaraque(context, x, y, size, color) {
+    context.fillStyle = color
+    context.beginPath()
+    context.moveTo(x + size * 0.2, y + size)
+    context.lineTo(x + size * 0.38, y + size * 0.15)
+    context.lineTo(x + size * 0.62, y + size * 0.15)
+    context.lineTo(x + size * 0.8, y + size)
+    context.closePath()
+    context.fill()
+    context.stroke()
+    context.fillStyle = '#f6f0d8'
+    context.fillRect(x + size * 0.34, y + size * 0.55, size * 0.32, size * 0.18)
+}
+
+function drawPer(context, x, y, size, color) {
+    context.fillStyle = color
+    context.fillRect(x + size * 0.2, y + size * 0.55, size * 0.6, size * 0.28)
+    context.fillRect(x + size * 0.42, y + size * 0.2, size * 0.16, size * 0.45)
+    context.strokeRect(x + size * 0.2, y + size * 0.55, size * 0.6, size * 0.28)
+    context.strokeStyle = '#2f2a25'
+    context.beginPath()
+    context.moveTo(x + size * 0.5, y + size * 0.25)
+    context.lineTo(x + size * 0.88, y + size * 0.12)
+    context.stroke()
+}
+
+function drawHef(context, x, y, size, color) {
+    context.fillStyle = color
+    context.beginPath()
+    context.arc(x + size * 0.5, y + size * 0.55, size * 0.32, 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
+    context.fillStyle = '#f6f0d8'
+    context.beginPath()
+    context.arc(x + size * 0.5, y + size * 0.55, size * 0.14, 0, Math.PI * 2)
+    context.fill()
+}
+
+function drawTujai(context, x, y, size, color) {
+    context.fillStyle = color
+    context.fillRect(x + size * 0.12, y + size * 0.35, size * 0.76, size * 0.58)
+    context.beginPath()
+    context.moveTo(x + size * 0.08, y + size * 0.36)
+    context.lineTo(x + size * 0.5, y + size * 0.08)
+    context.lineTo(x + size * 0.92, y + size * 0.36)
+    context.closePath()
+    context.fill()
+    context.stroke()
+    context.fillStyle = '#2f2a25'
+    context.fillRect(x + size * 0.38, y + size * 0.55, size * 0.24, size * 0.38)
+}
+
+function drawCaptureProgress(context, game, structure, x, y) {
+    if (!structure.capture) {
+        return
+    }
+
+    const progress = structure.capture.progressMs / game.state.config.captureDurationMs
+    const { pixelsPerFields } = game.state.screen
+
+    context.fillStyle = 'rgba(246, 189, 22, 0.28)'
+    context.fillRect(x, y + pixelsPerFields - 4, pixelsPerFields * Math.min(1, progress), 4)
+}
+
+function drawBars(context, x, y, size, entity) {
+    const health = Math.max(0, entity.integrity) / entity.maxIntegrity
+    const shield = entity.maxBarrier > 0 ? Math.max(0, entity.barrier) / entity.maxBarrier : 0
+
+    context.fillStyle = 'rgba(0, 0, 0, 0.35)'
+    context.fillRect(x + 2, y - 5, size - 4, 3)
+    context.fillStyle = '#d1495b'
+    context.fillRect(x + 2, y - 5, (size - 4) * health, 3)
+
+    if (entity.maxBarrier > 0) {
+        context.fillStyle = 'rgba(0, 0, 0, 0.30)'
+        context.fillRect(x + 2, y - 9, size - 4, 3)
+        context.fillStyle = '#2a9d8f'
+        context.fillRect(x + 2, y - 9, (size - 4) * shield, 3)
+    }
+}
+
+function drawUnits(context, game) {
+    const { pixelsPerFields } = game.state.screen
+
+    for (const unitId in game.state.units) {
+        const unit = game.state.units[unitId]
+        const owner = game.state.players[unit.ownerId]
+        const x = (unit.x + 0.5) * pixelsPerFields
+        const y = (unit.y + 0.5) * pixelsPerFields
+        const radius = pixelsPerFields * 0.32
+
+        context.save()
+        context.fillStyle = owner ? owner.color : '#2f2a25'
+        context.strokeStyle = '#2f2a25'
+        context.beginPath()
+        context.arc(x, y, radius, 0, Math.PI * 2)
+        context.fill()
+        context.stroke()
+        context.fillStyle = '#f6f0d8'
+        context.fillRect(x - radius * 0.35, y - radius * 0.2, radius * 0.7, radius * 0.4)
+        drawBars(context, unit.x * pixelsPerFields, unit.y * pixelsPerFields, pixelsPerFields, unit)
+        context.restore()
+    }
+}
+
+function drawPlayers(context, game, currentPlayerId) {
+    const { pixelsPerFields } = game.state.screen
 
     for (const playerId in game.state.players) {
         const player = game.state.players[playerId]
-        drawPlayer(context, player, game)
-    }
 
-    for (const crystalId in game.state.crystals) {
-        const crystal = game.state.crystals[crystalId]
-        drawPot(context, crystal, game, icons_gameImg)
+        if (!player.alive) {
+            continue
+        }
+
+        const centerX = (player.x + 0.5) * pixelsPerFields
+        const centerY = (player.y + 0.5) * pixelsPerFields
+        const radius = pixelsPerFields * 0.42
+
+        context.save()
+        context.fillStyle = player.color
+        context.strokeStyle = playerId === currentPlayerId ? '#ffffff' : '#2f2a25'
+        context.lineWidth = playerId === currentPlayerId ? 3 : 1.5
+        context.beginPath()
+        context.moveTo(centerX, centerY - radius)
+        context.lineTo(centerX + radius, centerY + radius * 0.72)
+        context.lineTo(centerX - radius, centerY + radius * 0.72)
+        context.closePath()
+        context.fill()
+        context.stroke()
+        context.restore()
+    }
+}
+
+function updateHud(hud, game, currentPlayerId, uiState) {
+    if (!hud) {
+        return
     }
 
     const currentPlayer = game.state.players[currentPlayerId]
-    if (currentPlayer) {
-        const isCurrentPlayer = true
-        drawPlayer(context, currentPlayer, game, isCurrentPlayer)
+
+    if (!game.state.hostKey || !currentPlayer) {
+        if (hud.__lastHtml !== '') {
+            hud.innerHTML = ''
+            hud.__lastHtml = ''
+        }
+        return
     }
 
-    updateScoreTable(scoreTable, game, currentPlayerId)
+    const selectedStructure = getSelectedStructure(game.state, uiState)
+    const winner = game.state.winnerId ? game.state.players[game.state.winnerId] : null
 
-    requestAnimationFrame(() => {
-        renderScreen(screen, scoreTable, game, requestAnimationFrame, currentPlayerId, icons_gameImg)
-    })
-}
-
-
-function drawPot(context, crystal, game, icons_gameImg) {
-    const { screen: { pixelsPerFields }, config: { showPotsValue } } = game.state
-    let { x, y, quantity } = crystal
-    x *= pixelsPerFields
-    y *= pixelsPerFields
-
-    //our pot size on img
-    const pictSize = 16
-    let column = Math.floor((quantity - 1) % 10)
-    let line = Math.floor((quantity - 1) / 10)
-
-    if (line > 0 && column <9)
-        line--
-
-    line = Math.min(line, 9)
-    column = Math.min(column, 9)
-
-    const spriteX = line * pictSize
-    const spriteY = column * pictSize
-    context.drawImage(icons_gameImg, spriteY, spriteX, 16, 16, x, y, pixelsPerFields, pixelsPerFields);
-
-    if (showPotsValue) {
-        //show texts
-        context.fillStyle = 'black'
-        context.font = "10px Arial";
-        context.fillText(quantity.toString(), x, y - 3);
-    }
-}
-
-//all skin is based on 5 pixels?, this function convert for responsive values
-function responsiveMeasure(initialValue, pixelsPerFields) {
-    return initialValue * (pixelsPerFields / 5)
-}
-
-function drawPlayer(screenContext, player, game, isCurrentPlayer = false) {
-    const { screen: { pixelsPerFields } } = game.state
-
-    let eyeAndMouthColors = 'black'
-    let faceColor = getColorFromScore(player.score)
-    if (isCurrentPlayer) {
-        eyeAndMouthColors = 'white'
-    }
-
-    let { x, y } = player
-    x *= pixelsPerFields
-    y *= pixelsPerFields
-
-    // Draw face
-    screenContext.fillStyle = faceColor
-    screenContext.fillRect(x, y, pixelsPerFields, pixelsPerFields)
-
-    // Draw eyes and mouth
-    screenContext.fillStyle = eyeAndMouthColors
-    screenContext.fillRect(x + responsiveMeasure(1, pixelsPerFields), y + responsiveMeasure(1, pixelsPerFields), responsiveMeasure(1, pixelsPerFields), responsiveMeasure(1, pixelsPerFields))
-    screenContext.fillRect(x + responsiveMeasure(3, pixelsPerFields), y + responsiveMeasure(1, pixelsPerFields), responsiveMeasure(1, pixelsPerFields), responsiveMeasure(1, pixelsPerFields))
-    screenContext.fillRect(x + responsiveMeasure(1, pixelsPerFields), y + responsiveMeasure(3, pixelsPerFields), responsiveMeasure(3, pixelsPerFields), responsiveMeasure(1, pixelsPerFields))
-    screenContext.fillStyle = 'black'
-    screenContext.font = "10px Arial";
-    screenContext.fillText(player.score.toString(), x, y - 3);
-}
-
-function getColorFromScore(score) {
-    score *= 10
-    const red = score > 240 ? 240 : score
-    const green = score > 219 ? 219 : score
-    const blue = score > 79 ? 79 : score
-    return `rgb(${red},${green},${blue})`
-}
-
-function updateScoreTable(scoreTable, game, currentPlayerId) {
-    const maxResults = 10
-
-    let scoreTableInnerHTML = `
-        <tr class="header">
-            <td>Top 10 Jogadores</td>
-            <td>Pontos</td>
-        </tr>
+    const hudHtml = `
+        <section class="panel room-panel">
+            <div class="panel-title">Sala ${escapeHtml(game.state.hostKey)}</div>
+            ${winner ? `<div class="winner">Vencedor: ${escapeHtml(winner.gamerTag)}</div>` : ''}
+            <div class="resource-grid">
+                <span><b>${formatNumber(currentPlayer.coal)}</b><small>Carvao</small></span>
+                <span><b>${formatNumber(currentPlayer.knowledge)}</b><small>Conhecimento</small></span>
+                <span><b>${currentPlayer.alive ? 'Ativa' : 'Fora'}</b><small>Base</small></span>
+            </div>
+        </section>
+        <section class="panel">
+            <div class="panel-title">Construcoes</div>
+            <div class="button-grid">
+                ${buildButton(game, currentPlayer, uiState, 'cover')}
+                ${buildButton(game, currentPlayer, uiState, 'taraque')}
+                ${buildButton(game, currentPlayer, uiState, 'per')}
+                ${buildButton(game, currentPlayer, uiState, 'hef')}
+                ${buildButton(game, currentPlayer, uiState, 'tujai')}
+            </div>
+        </section>
+        <section class="panel">
+            <div class="panel-title">Pesquisa</div>
+            <div class="button-grid">
+                ${researchButton(game, currentPlayer, 'per')}
+                ${researchButton(game, currentPlayer, 'hef')}
+                ${researchButton(game, currentPlayer, 'tujai')}
+            </div>
+        </section>
+        <section class="panel">
+            <div class="panel-title">Acoes</div>
+            ${selectedPanel(game, currentPlayer, selectedStructure, uiState)}
+            <button class="action-button" data-action="spawn-npc" data-npc="zunim" ${canSpawnNpc(game, currentPlayer) ? '' : 'disabled'}>Zunim ${game.state.catalog.npcs.zunim.cost}</button>
+        </section>
+        <section class="panel">
+            <div class="panel-title">Jogadores</div>
+            <div class="players-list">${playersList(game, currentPlayerId)}</div>
+        </section>
+        <section class="panel log-panel">
+            <div class="panel-title">Eventos</div>
+            <div class="log-list">${logsList(game)}</div>
+        </section>
     `
 
-    const playersArray = []
+    if (hud.__lastHtml !== hudHtml) {
+        hud.innerHTML = hudHtml
+        hud.__lastHtml = hudHtml
+    }
+}
 
-    for (let socketId in game.state.players) {
-        const player = game.state.players[socketId]
-        playersArray.push({
-            playerId: socketId,
-            x: player.x,
-            y: player.y,
-            score: player.score,
-        })
+function buildButton(game, player, uiState, type) {
+    const catalog = game.state.catalog.structures[type]
+    const enabled = Boolean(uiState.selectedTile) && player.coal >= catalog.cost && canBuild(game, player, type)
+
+    return `<button class="action-button" data-action="build" data-structure="${type}" ${enabled ? '' : 'disabled'}>${catalog.label} ${catalog.cost}</button>`
+}
+
+function researchButton(game, player, recipe) {
+    const research = game.state.catalog.research[recipe]
+    const taraqueLevel = highestStructureLevel(game.state, player.playerId, 'taraque')
+    const enabled = !player.unlocked[recipe]
+        && player.knowledge >= research.cost
+        && taraqueLevel >= research.requiresTaraqueLevel
+
+    return `<button class="action-button" data-action="research" data-recipe="${recipe}" ${enabled ? '' : 'disabled'}>${research.label} ${research.cost}</button>`
+}
+
+function selectedPanel(game, player, selectedStructure, uiState) {
+    if (!uiState.selectedTile) {
+        return '<div class="selected-empty">Nenhum terreno</div>'
     }
 
-    const playersSortedByScore = playersArray.sort((first, second) => {
-        if (first.score < second.score) {
-            return 1
-        }
-
-        if (first.score > second.score) {
-            return -1
-        }
-
-        return 0
-    })
-
-    const topScorePlayers = playersSortedByScore.slice(0, maxResults)
-
-    scoreTableInnerHTML = topScorePlayers.reduce((stringFormed, player) => {
-        return stringFormed + `
-            <tr class="${player.playerId === currentPlayerId ? 'current-player' : ''}">
-                <td>${player.playerId}</td>
-                <td>${player.score}</td>
-            </tr>
-        `
-    }, scoreTableInnerHTML)
-
-    let playerInTop10 = false
-    for (const player of topScorePlayers) {
-        if (player.playerId === currentPlayerId) {
-            playerInTop10 = true
-            break
-        }
+    if (!selectedStructure) {
+        return `<div class="selected-empty">Terreno ${uiState.selectedTile.x}, ${uiState.selectedTile.y}</div>`
     }
 
-    if (!playerInTop10) {
-        const currentPlayerFromTopScore = game.state.players[currentPlayerId]
+    const catalog = game.state.catalog.structures[selectedStructure.type]
+    const owner = selectedStructure.ownerId ? game.state.players[selectedStructure.ownerId] : null
+    const ownerName = owner ? owner.gamerTag : 'Neutro'
+    const upgradeCost = Math.round(catalog.cost * (1.5 ** selectedStructure.level))
+    const canUpgrade = true
 
-        if (!currentPlayerFromTopScore) {
-            return
-        }
+    return `
+        <div class="selected-card">
+            <strong>${catalog.label} N${selectedStructure.level}</strong>
+            <span>${escapeHtml(ownerName)}</span>
+            <span>${Math.max(0, Math.ceil(selectedStructure.integrity))}/${selectedStructure.maxIntegrity} HP</span>
+            <button class="action-button" data-action="upgrade" data-structure-id="${selectedStructure.structureId}" ${canUpgrade ? '' : 'disabled'}>Upgrade ${upgradeCost}</button>
+        </div>
+    `
+}
 
-        scoreTableInnerHTML += `
-            <tr class="current-player">
-                <td>${currentPlayerId}</td>
-                <td>${currentPlayerFromTopScore.score}</td>
-            </tr>
-        `
+function playersList(game, currentPlayerId) {
+    return Object.values(game.state.players)
+        .map(player => `
+            <div class="player-row ${player.playerId === currentPlayerId ? 'current' : ''}">
+                <span class="player-dot" style="background:${player.color}"></span>
+                <span>${escapeHtml(player.gamerTag)}</span>
+                <small>${player.alive ? 'ativa' : 'fora'}</small>
+            </div>
+        `)
+        .join('')
+}
+
+function logsList(game) {
+    if (!game.state.logs.length) {
+        return '<div class="log-line muted">Sem eventos</div>'
     }
 
-    scoreTable.innerHTML = scoreTableInnerHTML
+    return game.state.logs
+        .map(log => `<div class="log-line">${escapeHtml(log.message)}</div>`)
+        .join('')
+}
+
+function canBuild(game, player, type) {
+    if (type === 'cover') {
+        return true
+    }
+
+    const catalog = game.state.catalog.structures[type]
+
+    if (catalog.requiresBaseLevel) {
+        const base = game.state.structures[player.baseId]
+        return base && base.level >= catalog.requiresBaseLevel
+    }
+
+    if (catalog.requiresResearch) {
+        return Boolean(player.unlocked[catalog.requiresResearch])
+    }
+
+    return Boolean(player.unlocked[type])
+}
+
+function canSpawnNpc(game, player) {
+    return player.unlocked.tujai
+        && player.coal >= game.state.catalog.npcs.zunim.cost
+        && highestStructureLevel(game.state, player.playerId, 'tujai') > 0
+}
+
+function highestStructureLevel(state, playerId, type) {
+    return Object.values(state.structures || {})
+        .filter(structure => structure.ownerId === playerId)
+        .filter(structure => structure.type === type)
+        .filter(structure => !structure.disabled)
+        .reduce((highest, structure) => Math.max(highest, structure.level), 0)
+}
+
+function getSelectedStructure(state, uiState) {
+    if (uiState.selectedStructureId && state.structures[uiState.selectedStructureId]) {
+        return state.structures[uiState.selectedStructureId]
+    }
+
+    if (!uiState.selectedTile) {
+        return null
+    }
+
+    return getStructureAt(state, uiState.selectedTile.x, uiState.selectedTile.y)
+}
+
+function getStructureWeight(type) {
+    const weights = {
+        base: 1,
+        cover: 2,
+        taraque: 3,
+        tujai: 4,
+        per: 5,
+        hef: 6,
+    }
+
+    return weights[type] || 10
+}
+
+function formatNumber(value) {
+    return Math.floor(value).toLocaleString('pt-BR')
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;')
 }

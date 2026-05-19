@@ -1,200 +1,670 @@
 <html>
 
 <head>
-	<meta charset="utf-8">
-	<title>War Base</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>War Base</title>
 
-	<style>
-		body {
-			margin: 40px 0 0 0;
-			padding: 0;
-			background-color: #EEE;
-			text-align: center;
-		}
+    <style>
+        :root {
+            color-scheme: light;
+            --ink: #25221f;
+            --muted: #6f665c;
+            --paper: #fbf8ef;
+            --sand: #ede3ce;
+            --line: #d7cab2;
+            --coal: #34302b;
+            --accent: #1b9aaa;
+            --danger: #d1495b;
+            --gold: #f6bd16;
+            --green: #2a9d8f;
+        }
 
-		.damage-border {
-			outline: none;
-			border: 2px solid pink;
-			box-shadow: 0px 0px 8px pink;
-			-moz-box-shadow: 0px 0px 8px pink;
-			-webkit-box-shadow: 0px 0px 8px pink;
-		}
+        * {
+            box-sizing: border-box;
+        }
 
-		#screen {
-			border: 1px solid #CCC;
-			image-rendering: pixelated;
-			image-rendering: crisp-edges;
-			image-rendering: -moz-crisp-edges;
-			width: 400px;
-			height: 400px;
-			-webkit-box-shadow: 0px 4px 17px 0px rgba(0, 0, 0, 0.15);
-			-moz-box-shadow: 0px 4px 17px 0px rgba(0, 0, 0, 0.15);
-			box-shadow: 0px 4px 17px 0px rgba(0, 0, 0, 0.15);
-			margin-bottom: 20px;
-			margin-left: 20px;
-			margin-right: 20px;
-			display: inline-block;
-			vertical-align: top;
-			outline: none;
-			border: 2px solid pink;
-			box-shadow: 0px 0px 8px pink;
-			-moz-box-shadow: 0px 0px 8px pink;
-			-webkit-box-shadow: 0px 0px 8px pink;
-		}
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--sand);
+            color: var(--ink);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
 
-		#score-table {
-			font-size: 13px;
-			vertical-align: top;
-			display: inline-block;
-			font-family: Arial, Helvetica, sans-serif
-		}
+        button,
+        input {
+            font: inherit;
+        }
 
-		#score-table tr.header td {
-			border-bottom: 1px solid rgb(175, 139, 139);
-			padding-bottom: 8px;
-		}
+        .app-shell {
+            width: min(1260px, calc(100vw - 28px));
+            margin: 0 auto;
+            padding: 18px 0;
+        }
 
-		#score-table tr.footer td {
-			border-top: 1px solid rgb(175, 139, 139);
-			font-size: 11px;
-		}
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 14px;
+        }
 
-		#score-table td {
-			padding-top: 5px;
-			padding-bottom: 5px;
-		}
+        .brand {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+        }
 
-		#score-table .socket-id {
-			font-weight: normal;
-			color: rgb(41, 22, 22);
-			width: 150px;
-			white-space: nowrap;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			display: inline-block
-		}
+        .brand h1 {
+            margin: 0;
+            font-size: clamp(1.35rem, 2vw, 2rem);
+            line-height: 1;
+            letter-spacing: 0;
+        }
 
-		#score-table .score-value {
-			font-weight: bold;
-			color: rgb(255, 0, 0);
-			text-align: right;
-		}
+        .brand span {
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
 
-		#score-table .current-player {
-			color: #0000ff;
-		}
-	</style>
-	<script src="/socket.io/socket.io.js"></script>
+        .connection-status {
+            color: var(--muted);
+            font-size: 0.86rem;
+        }
+
+        .lobby {
+            display: grid;
+            place-items: center;
+            min-height: calc(100vh - 110px);
+        }
+
+        .lobby-card {
+            width: min(460px, 100%);
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: 0 16px 40px rgba(37, 34, 31, 0.14);
+            padding: 22px;
+        }
+
+        .lobby-card h2 {
+            margin: 0 0 16px;
+            font-size: 1.25rem;
+            letter-spacing: 0;
+        }
+
+        .field-stack {
+            display: grid;
+            gap: 12px;
+        }
+
+        label {
+            display: grid;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        input {
+            width: 100%;
+            min-height: 42px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fffdf8;
+            color: var(--ink);
+            padding: 0 12px;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(27, 154, 170, 0.16);
+        }
+
+        .lobby-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .primary-button,
+        .secondary-button,
+        .action-button {
+            min-height: 38px;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 800;
+            letter-spacing: 0;
+        }
+
+        .primary-button {
+            background: var(--accent);
+            color: white;
+        }
+
+        .secondary-button {
+            background: var(--coal);
+            color: white;
+        }
+
+        .action-button {
+            width: 100%;
+            background: #fffdf8;
+            border-color: var(--line);
+            color: var(--ink);
+            padding: 0 10px;
+        }
+
+        .action-button:hover:not(:disabled),
+        .primary-button:hover,
+        .secondary-button:hover {
+            filter: brightness(0.96);
+        }
+
+        .action-button:disabled,
+        .primary-button:disabled,
+        .secondary-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.45;
+        }
+
+        .error-line {
+            min-height: 18px;
+            margin-top: 12px;
+            color: var(--danger);
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .game-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 340px;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .board-wrap {
+            min-width: 0;
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 12px 30px rgba(37, 34, 31, 0.12);
+        }
+
+        #screen {
+            display: block;
+            width: 100%;
+            max-height: calc(100vh - 98px);
+            aspect-ratio: 48 / 30;
+            border: 1px solid #bbae94;
+            border-radius: 4px;
+            background: #f4efe4;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            outline: none;
+        }
+
+        .side-rail,
+        #hud {
+            display: grid;
+            gap: 10px;
+        }
+
+        .panel {
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 10px 24px rgba(37, 34, 31, 0.08);
+        }
+
+        .panel-title {
+            margin-bottom: 10px;
+            font-size: 0.78rem;
+            color: var(--muted);
+            font-weight: 900;
+            letter-spacing: 0;
+            text-transform: uppercase;
+        }
+
+        .how-to-panel {
+            background: #fffdf8;
+        }
+
+        .how-to-panel details {
+            display: grid;
+            gap: 10px;
+        }
+
+        .how-to-panel summary {
+            cursor: pointer;
+            color: var(--ink);
+            font-weight: 900;
+            list-style-position: inside;
+        }
+
+        .help-block {
+            display: grid;
+            gap: 7px;
+            margin-top: 10px;
+        }
+
+        .help-block strong {
+            font-size: 0.8rem;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        .help-list {
+            display: grid;
+            gap: 6px;
+            margin: 0;
+            padding-left: 18px;
+            color: var(--ink);
+            font-size: 0.88rem;
+            line-height: 1.3;
+        }
+
+        .command-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+            margin: 0;
+        }
+
+        .command-list div {
+            display: grid;
+            grid-template-columns: 96px minmax(0, 1fr);
+            gap: 8px;
+            align-items: center;
+            color: var(--ink);
+            font-size: 0.88rem;
+        }
+
+        .command-list dt {
+            margin: 0;
+            padding: 4px 6px;
+            border-radius: 5px;
+            background: var(--sand);
+            border: 1px solid var(--line);
+            color: var(--coal);
+            font-weight: 900;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .command-list dd {
+            margin: 0;
+            min-width: 0;
+            color: var(--muted);
+        }
+
+        .winner {
+            margin: -2px 0 10px;
+            padding: 8px;
+            border-radius: 6px;
+            background: rgba(246, 189, 22, 0.22);
+            color: #7a5100;
+            font-weight: 900;
+        }
+
+        .resource-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .resource-grid span {
+            display: grid;
+            gap: 2px;
+            min-width: 0;
+            padding: 8px;
+            border-radius: 6px;
+            background: #fffdf8;
+            border: 1px solid var(--line);
+        }
+
+        .resource-grid b {
+            overflow-wrap: anywhere;
+        }
+
+        .resource-grid small,
+        .player-row small,
+        .selected-card span {
+            color: var(--muted);
+            font-size: 0.76rem;
+        }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .selected-empty,
+        .selected-card {
+            display: grid;
+            gap: 7px;
+            margin-bottom: 8px;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .selected-card strong {
+            color: var(--ink);
+        }
+
+        .players-list,
+        .log-list {
+            display: grid;
+            gap: 7px;
+        }
+
+        .player-row {
+            display: grid;
+            grid-template-columns: 12px minmax(0, 1fr) auto;
+            gap: 8px;
+            align-items: center;
+            min-height: 24px;
+            color: var(--ink);
+        }
+
+        .player-row.current {
+            font-weight: 900;
+        }
+
+        .player-row span:nth-child(2) {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .player-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 1px solid rgba(37, 34, 31, 0.35);
+        }
+
+        .log-line {
+            color: var(--muted);
+            font-size: 0.84rem;
+            line-height: 1.25;
+        }
+
+        .muted {
+            opacity: 0.7;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 980px) {
+            .game-layout {
+                grid-template-columns: 1fr;
+            }
+
+            #screen {
+                max-height: none;
+            }
+        }
+
+        @media (max-width: 560px) {
+            .app-shell {
+                width: min(100vw - 16px, 1260px);
+                padding-top: 10px;
+            }
+
+            .topbar {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 6px;
+            }
+
+            .lobby-actions,
+            .button-grid,
+            .resource-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .board-wrap,
+            .panel,
+            .lobby-card {
+                border-radius: 6px;
+            }
+        }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 
 <body>
-    <img id="icons_game-img" src="./img/icons_game.png"/>
-	<canvas id="screen" width="10" height="10" class='damage-border'></canvas>
-	<table id="score-table"></table>	
+    <main class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <h1>War Base</h1>
+                <span id="room-label">sem sala</span>
+            </div>
+            <div id="connection-status" class="connection-status">conectando</div>
+        </header>
 
-	<script type="module">
-		import createGame from './game.js'
-            import createKeyboardListener from './keyboard-listener.js'
-            import renderScreen, { setupScreen } from './render-screen.js'
-            
-            const game = createGame()
-            const keyboardListener = createKeyboardListener(document)
+        <section id="lobby" class="lobby">
+            <form id="lobby-form" class="lobby-card">
+                <h2>Partida privada</h2>
+                <div class="field-stack">
+                    <label>
+                        GamerTag
+                        <input id="gamer-tag" name="gamerTag" maxlength="18" autocomplete="nickname" required>
+                    </label>
+                    <label>
+                        HostKey
+                        <input id="host-key" name="hostKey" maxlength="8" autocomplete="off">
+                    </label>
+                </div>
+                <div class="lobby-actions">
+                    <button class="primary-button" type="submit" data-mode="create">Criar partida</button>
+                    <button class="secondary-button" type="submit" data-mode="join">Entrar</button>
+                </div>
+                <div id="lobby-error" class="error-line"></div>
+            </form>
+        </section>
 
-            const socket = io() 
+        <section id="game-view" class="game-layout hidden">
+            <div class="board-wrap">
+                <canvas id="screen" width="864" height="540"></canvas>
+            </div>
+            <aside class="side-rail">
+                <section class="panel how-to-panel">
+                    <details open>
+                        <summary>Como jogar</summary>
+                        <div class="help-block">
+                            <strong>Objetivo</strong>
+                            <ul class="help-list">
+                                <li>Proteja sua Base. A ultima base ativa vence.</li>
+                                <li>Capture fabricas neutras ou desativadas ficando parado no alcance por 30 segundos.</li>
+                                <li>Use Cover para gerar carvao, evolua a Base para nivel 2 e construa Taraque para pesquisar ataques.</li>
+                                <li>Pesquise Per, Hef e Tujai. A Tujai permite enviar Zunim contra a base inimiga mais proxima.</li>
+                            </ul>
+                        </div>
+                        <div class="help-block">
+                            <strong>Comandos</strong>
+                            <dl class="command-list">
+                                <div><dt>WASD</dt><dd>Mover o jogador.</dd></div>
+                                <div><dt>Setas</dt><dd>Mover o jogador.</dd></div>
+                                <div><dt>Clique</dt><dd>Selecionar terreno ou construcao.</dd></div>
+                                <div><dt>Botoes</dt><dd>Construir, pesquisar, evoluir e enviar NPC.</dd></div>
+                                <div><dt>HostKey</dt><dd>Codigo para outros jogadores entrarem na sala.</dd></div>
+                            </dl>
+                        </div>
+                    </details>
+                </section>
+                <div id="hud"></div>
+            </aside>
+        </section>
+    </main>
 
-            function sound(src) {        
-                this.sound = document.createElement("audio");
-                this.sound.src = src;
-                this.sound.setAttribute("preload", "auto");
-                this.sound.setAttribute("controls", "none");
-                this.sound.style.display = "none";
-                document.body.appendChild(this.sound);
-                this.play = function(){
-                    this.sound.play();
-                }
-                this.stop = function(){
-                    this.sound.pause();
-                }    
+    <script type="module">
+        import createGame from './game.js'
+        import createKeyboardListener from './keyboard-listener.js'
+        import renderScreen, { getStructureAt, getTileFromCanvasEvent, setupScreen } from './render-screen.js'
+
+        const game = createGame()
+        const keyboardListener = createKeyboardListener(document)
+        const socket = io()
+        const uiState = {
+            selectedTile: null,
+            selectedStructureId: null,
+        }
+
+        let renderStarted = false
+        let keyboardSubscribed = false
+        let submitMode = 'create'
+
+        const lobby = document.getElementById('lobby')
+        const lobbyForm = document.getElementById('lobby-form')
+        const lobbyError = document.getElementById('lobby-error')
+        const gameView = document.getElementById('game-view')
+        const screen = document.getElementById('screen')
+        const hud = document.getElementById('hud')
+        const roomLabel = document.getElementById('room-label')
+        const connectionStatus = document.getElementById('connection-status')
+
+        socket.on('connect', () => {
+            connectionStatus.textContent = 'online'
+        })
+
+        socket.on('disconnect', () => {
+            connectionStatus.textContent = 'offline'
+            keyboardListener.unsubscribeAll()
+            keyboardSubscribed = false
+        })
+
+        lobbyForm.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-mode]')
+
+            if (button) {
+                submitMode = button.dataset.mode
+            }
+        })
+
+        lobbyForm.addEventListener('submit', (event) => {
+            event.preventDefault()
+            lobbyError.textContent = ''
+
+            const formData = new FormData(lobbyForm)
+            const gamerTag = String(formData.get('gamerTag') || '').trim()
+            const hostKey = String(formData.get('hostKey') || '').trim().toUpperCase()
+
+            if (submitMode === 'join' && !hostKey) {
+                lobbyError.textContent = 'Informe uma HostKey.'
+                return
             }
 
-            const audios = {
-                playerCollision: new sound("./sounds/bubble_hit.mp3"),
-                newCrystal: new sound("./sounds/fruit_drop.mp3"),
-                wallCollision: new sound("./sounds/wall_energy_shock.mp3"),
-                getCrystal: new sound("./sounds/get_crystal.mp3"),
-                drinkPot: new sound("./sounds/human_swallowing_loud.mp3"),
-                dying: new sound("./sounds/death_sound_in_minecraft.mp3"), // OC
+            socket.emit(submitMode === 'join' ? 'join-match' : 'create-match', {
+                gamerTag,
+                hostKey,
+            })
+        })
+
+        socket.on('setup', (result) => {
+            game.setState(result.state)
+            enterGame()
+        })
+
+        socket.on('state-update', (command) => {
+            if (game.state.hostKey && command.hostKey !== game.state.hostKey) {
+                return
             }
 
-            socket.on('connect', () => {
-                const playerId = socket.id
-                // console.log(`Player connected on Client with id: ${playerId}`)
-                // console.log('socket', socket)
+            game.setState(command.state)
+            roomLabel.textContent = `sala ${game.state.hostKey}`
+        })
 
-                const screen = document.getElementById('screen')
-                const scoreTable = document.getElementById('score-table')
-                const icons_gameImg = document.getElementById('icons_game-img')
-                
-                setupScreen(screen, game)
-                renderScreen(screen, scoreTable, game, requestAnimationFrame, playerId, icons_gameImg)
-            })
+        socket.on('join-error', (result) => {
+            lobbyError.textContent = result.error || 'Nao foi possivel entrar.'
+        })
 
-            socket.on('disconnect', () => {
-                console.log('Unsubscribing All')
-                keyboardListener.unsubscribeAll();
-            })
+        screen.addEventListener('click', (event) => {
+            if (!game.state.hostKey) {
+                return
+            }
 
-            socket.on('setup', (state) => {
-                const playerId = socket.id
-                game.setState(state)
+            const tile = getTileFromCanvasEvent(event, screen, game)
+            const structure = getStructureAt(game.state, tile.x, tile.y)
 
-                keyboardListener.registerPlayerId(playerId)
-                keyboardListener.subscribe(game.movePlayer)
+            uiState.selectedTile = tile
+            uiState.selectedStructureId = structure ? structure.structureId : null
+        })
+
+        hud.addEventListener('pointerdown', (event) => {
+            const button = event.target.closest('button[data-action]')
+
+            if (!button || button.disabled) {
+                return
+            }
+
+            event.preventDefault()
+            const action = button.dataset.action
+
+            if (action === 'build' && uiState.selectedTile) {
+                socket.emit('game-action', {
+                    action: 'build',
+                    structureType: button.dataset.structure,
+                    x: uiState.selectedTile.x,
+                    y: uiState.selectedTile.y,
+                })
+            }
+
+            if (action === 'upgrade') {
+                socket.emit('game-action', {
+                    action: 'upgrade',
+                    structureId: button.dataset.structureId,
+                })
+            }
+
+            if (action === 'research') {
+                socket.emit('game-action', {
+                    action: 'research',
+                    recipe: button.dataset.recipe,
+                })
+            }
+
+            if (action === 'spawn-npc') {
+                socket.emit('game-action', {
+                    action: 'spawn-npc',
+                    npcType: button.dataset.npc,
+                })
+            }
+        })
+
+        function enterGame() {
+            lobby.classList.add('hidden')
+            gameView.classList.remove('hidden')
+            roomLabel.textContent = `sala ${game.state.hostKey}`
+            setupScreen(screen, game)
+
+            keyboardListener.registerPlayerId(socket.id)
+
+            if (!keyboardSubscribed) {
                 keyboardListener.subscribe((command) => {
                     socket.emit('move-player', command)
                 })
-            })
+                keyboardSubscribed = true
+            }
 
-            socket.on('add-player', (command) => {
-                // console.log(`Receiving ${command.type} -> ${command.playerId}`)
-                game.addPlayer(command)
-            })
-
-            socket.on('remove-player', (command) => {
-                // console.log(`Receiving ${command.type} -> ${command.playerId}`)
-                game.removePlayer(command)
-            })
-
-            socket.on('move-player', (command) => {
-                // console.log(`Receiving ${command.type} -> ${command.playerId}`)
-
-                const playerId = socket.id
-
-                if (playerId !== command.playerId) {
-                    game.movePlayer(command)
-                }
-            })
-
-            socket.on('add-crystal', (command) => {
-                // console.log(`Receiving ${command.type} -> ${command.crystalId}`)
-                game.addCrystal(command)
-            })
-
-            socket.on('play-audio', (command) => {
-                // console.log(`Receiving ${command.type} -> ${command.crystalId}`)
-                const playerId = socket.id
-                if(command.audio && audios[command.audio]){
-                    //only play sound for those users
-                    if(command.playersId && command.playersId.indexOf(playerId)>-1)
-                        audios[command.audio].sound.cloneNode(true).play()                                        
-                }                    
-            })
-
-            socket.on('remove-crystal', (command) => {
-                // console.log(`Receiving ${command.type} -> ${command.crystalId}`)
-                game.removeCrystal(command)
-            })
-        </script>
+            if (!renderStarted) {
+                renderScreen(screen, hud, game, requestAnimationFrame, socket.id, uiState)
+                renderStarted = true
+            }
+        }
+    </script>
 </body>
 
 </html>

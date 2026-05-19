@@ -1,19 +1,37 @@
 export default function createKeyboardListener(document) {
     const state = {
         observers: [],
-        playerId: null
+        playerId: null,
+        enabled: false,
     }
+
+    const acceptedKeys = new Set([
+        'ArrowUp',
+        'ArrowRight',
+        'ArrowDown',
+        'ArrowLeft',
+        'w',
+        'a',
+        's',
+        'd',
+        'W',
+        'A',
+        'S',
+        'D',
+    ])
 
     function registerPlayerId(playerId) {
         state.playerId = playerId
+        state.enabled = true
     }
 
     function subscribe(observerFunction) {
         state.observers.push(observerFunction)
     }
 
-    function unsubscribeAll(observerFunction) {
+    function unsubscribeAll() {
         state.observers = []
+        state.enabled = false
     }
 
     function notifyAll(command) {
@@ -27,18 +45,22 @@ export default function createKeyboardListener(document) {
     function handleKeydown(event) {
         const keyPressed = event.key
 
-        const command = {
-            type: 'move-player',
-            playerId: state.playerId,
-            keyPressed
+        if (!state.enabled || !acceptedKeys.has(keyPressed)) {
+            return
         }
 
-        notifyAll(command)
+        event.preventDefault()
+
+        notifyAll({
+            type: 'move-player',
+            playerId: state.playerId,
+            keyPressed,
+        })
     }
 
     return {
         subscribe,
         unsubscribeAll,
-        registerPlayerId
+        registerPlayerId,
     }
 }
