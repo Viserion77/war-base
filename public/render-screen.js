@@ -24,7 +24,7 @@ export default function renderScreen(screen, hud, game, requestAnimationFrame, c
 
     context.clearRect(0, 0, width * pixelsPerFields, height * pixelsPerFields)
     drawTerrain(context, game)
-    drawSelection(context, game, uiState)
+    drawSelection(context, game, uiState, currentPlayerId)
     drawRanges(context, game, uiState)
     drawStructures(context, game)
     drawUnits(context, game)
@@ -69,7 +69,7 @@ function drawTerrain(context, game) {
     }
 }
 
-function drawSelection(context, game, uiState) {
+function drawSelection(context, game, uiState, currentPlayerId) {
     if (!uiState.selectedTile) {
         return
     }
@@ -77,10 +77,18 @@ function drawSelection(context, game, uiState) {
     const { pixelsPerFields } = game.state.screen
     const x = uiState.selectedTile.x * pixelsPerFields
     const y = uiState.selectedTile.y * pixelsPerFields
+    const currentPlayer = game.state.players[currentPlayerId]
+    const selectedStructure = getSelectedStructure(game.state, uiState)
+    const placementStatus = selectedStructure
+        ? null
+        : getPlacementStatus(game.state, currentPlayer, uiState)
+    const color = getSelectionColor(placementStatus)
 
     context.save()
-    context.strokeStyle = '#f6bd16'
+    context.fillStyle = color.fill
+    context.strokeStyle = color.stroke
     context.lineWidth = 2
+    context.fillRect(x + 2, y + 2, pixelsPerFields - 4, pixelsPerFields - 4)
     context.strokeRect(x + 2, y + 2, pixelsPerFields - 4, pixelsPerFields - 4)
     context.restore()
 }
@@ -391,9 +399,11 @@ function updateHud(hud, game, currentPlayerId, uiState) {
 
 function buildButton(game, player, uiState, type) {
     const catalog = game.state.catalog.structures[type]
-    const enabled = Boolean(uiState.selectedTile) && player.coal >= catalog.cost && canBuild(game, player, type)
+    const disabledReason = getBuildDisabledReason(game, player, uiState, type)
+    const enabled = !disabledReason
+    const title = disabledReason ? ` title="${escapeHtml(disabledReason)}"` : ''
 
-    return `<button class="action-button" data-action="build" data-structure="${type}" ${enabled ? '' : 'disabled'}>${catalog.label} ${catalog.cost}</button>`
+    return `<button class="action-button" data-action="build" data-structure="${type}"${title} ${enabled ? '' : 'disabled'}>${catalog.label} ${catalog.cost}</button>`
 }
 
 function researchButton(game, player, recipe) {
@@ -412,7 +422,14 @@ function selectedPanel(game, player, selectedStructure, uiState) {
     }
 
     if (!selectedStructure) {
-        return `<div class="selected-empty">Terreno ${uiState.selectedTile.x}, ${uiState.selectedTile.y}</div>`
+        const placementStatus = getPlacementStatus(game.state, player, uiState)
+
+        return `
+            <div class="selected-empty">
+                <span>Terreno ${uiState.selectedTile.x}, ${uiState.selectedTile.y}</span>
+                <span class="tile-status tile-status-${placementStatus.status}">${escapeHtml(placementStatus.message)}</span>
+            </div>
+        `
     }
 
     const catalog = game.state.catalog.structures[selectedStructure.type]
@@ -451,6 +468,116 @@ function logsList(game) {
     return game.state.logs
         .map(log => `<div class="log-line">${escapeHtml(log.message)}</div>`)
         .join('')
+}
+
+function getBuildDisabledReason(game, player, uiState, type) {
+    const catalog = game.state.catalog.structures[type]
+
+    if (!uiState.selectedTile) {
+        return 'Selecione um terreno.'
+    }
+
+    const placementStatus = getPlacementStatus(game.state, player, uiState)
+
+    if (placementStatus.status !== 'available') {
+        return placementStatus.message
+    }
+
+    if (!canBuild(game, player, type)) {
+        return getBuildRequirementMessage(game, player, type)
+    }
+
+    if (player.coal < catalog.cost) {
+        return `Carvao insuficiente: precisa de ${catalog.cost}.`
+    }
+
+    return ''
+}
+
+function getBuildRequirementMessage(game, player, type) {
+    const catalog = game.state.catalog.structures[type]
+
+    if (catalog.requiresBaseLevel) {
+        return `Base nivel ${catalog.requiresBaseLevel} necessaria.`
+    }
+
+    if (catalog.requiresResearch) {
+        const research = game.state.catalog.research[catalog.requiresResearch]
+        const label = research ? research.label : catalog.requiresResearch
+
+        return `Pesquise ${label} primeiro.`
+    }
+
+    if (!player.unlocked[type]) {
+        return `${catalog.label} ainda nao liberada.`
+    }
+
+    return `${catalog.label} indisponivel.`
+}
+
+function getPlacementStatus(state, player, uiState) {
+    if (!uiState.selectedTile) {
+        return {
+            status: 'blocked',
+            message: 'Selecione um terreno.',
+        }
+    }
+
+    const tile = uiState.selectedTile
+
+    if (!player || !player.alive) {
+        return {
+            status: 'blocked',
+            message: 'Jogador fora da partida.',
+        }
+    }
+
+    if (!isInsideMap(state, tile.x, tile.y)) {
+        return {
+            status: 'blocked',
+            message: 'Terreno invalido.',
+        }
+    }
+
+    if (getStructureAt(state, tile.x, tile.y) || getActorAt(state, tile.x, tile.y)) {
+        return {
+            status: 'blocked',
+            message: 'Terreno ocupado.',
+        }
+    }
+
+    if (!isNearOwnedAnchor(state, player.playerId, tile.x, tile.y)) {
+        return {
+            status: 'blocked',
+            message: 'Fora do alcance de construcao.',
+        }
+    }
+
+    return {
+        status: 'available',
+        message: 'Terreno livre para construir.',
+    }
+}
+
+function getSelectionColor(placementStatus) {
+    if (!placementStatus) {
+        return {
+            fill: 'rgba(246, 189, 22, 0.18)',
+            stroke: '#f6bd16',
+        }
+    }
+
+    if (placementStatus.status === 'available') {
+        return {
+            fill: 'rgba(42, 157, 143, 0.18)',
+            stroke: '#2a9d8f',
+        }
+    }
+
+    return {
+        fill: 'rgba(209, 73, 91, 0.18)',
+        stroke: '#d1495b',
+    }
 }
 
 function canBuild(game, player, type) {
@@ -496,6 +623,40 @@ function getSelectedStructure(state, uiState) {
     }
 
     return getStructureAt(state, uiState.selectedTile.x, uiState.selectedTile.y)
+}
+
+function getActorAt(state, x, y) {
+    const player = Object.values(state.players || {})
+        .find(candidate => candidate.alive
+            && candidate.x === x
+            && candidate.y === y)
+
+    if (player) {
+        return player
+    }
+
+    return Object.values(state.units || {})
+        .find(unit => unit.x === x && unit.y === y) || null
+}
+
+function isNearOwnedAnchor(state, playerId, x, y) {
+    return Object.values(state.structures || {})
+        .filter(structure => structure.ownerId === playerId && !structure.disabled)
+        .some(structure => distance(structure, { x, y }) <= state.config.buildRange)
+}
+
+function isInsideMap(state, x, y) {
+    return x >= 0
+        && x < state.screen.width
+        && y >= 0
+        && y < state.screen.height
+}
+
+function distance(first, second) {
+    const dx = first.x - second.x
+    const dy = first.y - second.y
+
+    return Math.sqrt(dx * dx + dy * dy)
 }
 
 function getStructureWeight(type) {
