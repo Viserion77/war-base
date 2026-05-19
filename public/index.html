@@ -616,6 +616,15 @@
             uiState.selectedStructureId = structure ? structure.structureId : null
         })
 
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape' || !game.state.hostKey) {
+                return
+            }
+
+            uiState.selectedTile = null
+            uiState.selectedStructureId = null
+        })
+
         hud.addEventListener('pointerdown', (event) => {
             const button = event.target.closest('button[data-action]')
 
