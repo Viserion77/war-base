@@ -436,16 +436,34 @@ function selectedPanel(game, player, selectedStructure, uiState) {
     const owner = selectedStructure.ownerId ? game.state.players[selectedStructure.ownerId] : null
     const ownerName = owner ? owner.gamerTag : 'Neutro'
     const upgradeCost = Math.round(catalog.cost * (1.5 ** selectedStructure.level))
-    const canUpgrade = true
+    const upgradeDisabledReason = getUpgradeDisabledReason(player, selectedStructure, upgradeCost)
+    const canUpgrade = !upgradeDisabledReason
+    const title = upgradeDisabledReason ? ` title="${escapeHtml(upgradeDisabledReason)}"` : ''
 
     return `
         <div class="selected-card">
             <strong>${catalog.label} N${selectedStructure.level}</strong>
             <span>${escapeHtml(ownerName)}</span>
             <span>${Math.max(0, Math.ceil(selectedStructure.integrity))}/${selectedStructure.maxIntegrity} HP</span>
-            <button class="action-button" data-action="upgrade" data-structure-id="${selectedStructure.structureId}" ${canUpgrade ? '' : 'disabled'}>Upgrade ${upgradeCost}</button>
+            <button class="action-button" data-action="upgrade" data-structure-id="${selectedStructure.structureId}"${title} ${canUpgrade ? '' : 'disabled'}>Upgrade ${upgradeCost}</button>
         </div>
     `
+}
+
+function getUpgradeDisabledReason(player, structure, cost) {
+    if (structure.ownerId !== player.playerId) {
+        return 'Selecione uma construcao sua para upgrade.'
+    }
+
+    if (structure.disabled) {
+        return 'Esta construcao esta desativada.'
+    }
+
+    if (player.coal < cost) {
+        return `Carvao insuficiente: precisa de ${cost}.`
+    }
+
+    return ''
 }
 
 function playersList(game, currentPlayerId) {
