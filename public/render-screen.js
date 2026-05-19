@@ -24,6 +24,7 @@ export default function renderScreen(screen, hud, game, requestAnimationFrame, c
 
     context.clearRect(0, 0, width * pixelsPerFields, height * pixelsPerFields)
     drawTerrain(context, game)
+    drawBuildRanges(context, game, uiState, currentPlayerId)
     drawSelection(context, game, uiState, currentPlayerId)
     drawRanges(context, game, uiState)
     drawStructures(context, game)
@@ -67,6 +68,49 @@ function drawTerrain(context, game) {
         context.lineTo(canvasWidth, y * pixelsPerFields + 0.5)
         context.stroke()
     }
+}
+
+function drawBuildRanges(context, game, uiState, currentPlayerId) {
+    if (!uiState.selectedTile || getSelectedStructure(game.state, uiState)) {
+        return
+    }
+
+    const player = game.state.players[currentPlayerId]
+
+    if (!player || !player.alive) {
+        return
+    }
+
+    const anchors = Object.values(game.state.structures || {})
+        .filter(structure => structure.ownerId === player.playerId && !structure.disabled)
+
+    if (!anchors.length) {
+        return
+    }
+
+    const { pixelsPerFields } = game.state.screen
+    const range = game.state.config.buildRange * pixelsPerFields
+
+    context.save()
+    context.fillStyle = hexToRgba(player.color, 0.045)
+    context.strokeStyle = hexToRgba(player.color, 0.22)
+    context.lineWidth = 1.5
+    context.setLineDash([4, 4])
+
+    for (const structure of anchors) {
+        context.beginPath()
+        context.arc(
+            (structure.x + 0.5) * pixelsPerFields,
+            (structure.y + 0.5) * pixelsPerFields,
+            range,
+            0,
+            Math.PI * 2,
+        )
+        context.fill()
+        context.stroke()
+    }
+
+    context.restore()
 }
 
 function drawSelection(context, game, uiState, currentPlayerId) {
@@ -692,6 +736,18 @@ function getStructureWeight(type) {
 
 function formatNumber(value) {
     return Math.floor(value).toLocaleString('pt-BR')
+}
+
+function hexToRgba(color, alpha) {
+    if (!/^#[0-9a-f]{6}$/i.test(color)) {
+        return "rgba(27, 154, 170, " + alpha + ")"
+    }
+
+    const red = parseInt(color.slice(1, 3), 16)
+    const green = parseInt(color.slice(3, 5), 16)
+    const blue = parseInt(color.slice(5, 7), 16)
+
+    return "rgba(" + red + ", " + green + ", " + blue + ", " + alpha + ")"
 }
 
 function escapeHtml(value) {
