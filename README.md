@@ -6,19 +6,32 @@ War Base é um jogo multiplayer FFA (free-for-all) de bases. Cada jogador admini
 
 ## Como Rodar
 
+Requisitos:
+
+- Node.js 20 ou superior
+- npm 10 ou superior
+
 Instale as dependências:
 
 ```bash
 npm install
 ```
 
-Inicie o servidor:
+Inicie em desenvolvimento, com reload automático:
+
+```bash
+npm run dev
+```
+
+Ou rode como produção local:
 
 ```bash
 npm start
 ```
 
-Acesse a partida em `http://localhost:4000`. O servidor usa a porta `4000`; se ela já estiver ocupada, finalize o processo antigo antes de iniciar outro.
+Acesse a partida em `http://localhost:4000`. O servidor usa a porta `4000` por padrão, mas aceita a variável `PORT` para outros ambientes, por exemplo `PORT=3000 npm start`.
+
+O endpoint `GET /health` retorna status `ok` e pode ser usado por checks de disponibilidade. Ao receber `SIGINT` ou `SIGTERM`, o servidor encerra as conexões HTTP e Socket.IO antes de finalizar.
 
 ## Como Entrar
 
@@ -177,7 +190,11 @@ Arquivos principais:
 Comandos úteis:
 
 ```bash
+npm run dev
 npm start
-node --check public/game.js
-node --check public/render-screen.js
+npm test
+npm run coverage
+npm run test:watch
 ```
+
+O comando `npm run coverage` exige 100% em statements, branches, functions e lines para todo o projeto.

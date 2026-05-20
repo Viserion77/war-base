@@ -1015,15 +1015,11 @@ export default function createGame() {
             return moveUnitToward(room, unit, structure, CONFIG.captureRange)
         }
 
-        if (structure.ownerId !== unit.ownerId) {
-            if (distance(unit, structure) <= unit.attackRange) {
-                return attackWithUnit(room, unit, { kind: 'structure', value: structure }, now)
-            }
-
-            return moveUnitToward(room, unit, structure, unit.attackRange)
+        if (distance(unit, structure) <= unit.attackRange) {
+            return attackWithUnit(room, unit, { kind: 'structure', value: structure }, now)
         }
 
-        return false
+        return moveUnitToward(room, unit, structure, unit.attackRange)
     }
 
     function findCaptureUnitContestTarget(room, unit, structure) {
@@ -1900,6 +1896,40 @@ export default function createGame() {
         executeAction,
         getPublicState,
         getHostKeyForPlayer,
+        __testing: {
+            getRoom(hostKey) {
+                return rooms[hostKey]
+            },
+            tickRoom,
+            debugLog,
+            createStructure,
+            buildStructure,
+            upgradeStructure,
+            researchRecipe,
+            spawnNpc,
+            startCaptureOrder,
+            processPlayerRespawns,
+            regenerateBarriers,
+            processCaptureUnitOrders,
+            processCaptureUnitOrder,
+            processCaptures,
+            captureStructure,
+            processTowerAttacks,
+            processNpcActions,
+            checkVictory,
+            applyDamage,
+            applySplashDamage,
+            applyDamageToPlayer,
+            applyDamageToUnit,
+            applyDamageToStructure,
+            eliminatePlayer,
+            getStepToward,
+            getRespawnTile,
+            canBuildStructure,
+            getEmptyTileNear,
+            getEmptyNeighbor,
+            summarizeActor,
+        },
     }
 }
 

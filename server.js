@@ -1,24 +1,93 @@
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import express from 'express'
 import http from 'http'
 import { Server } from 'socket.io'
 import createGame from './public/game.js'
 
-const PORT = 4000
-const app = express()
-const server = http.createServer(app)
-const sockets = new Server(server)
+export const DEFAULT_PORT = process.env.PORT || 4000
 
-app.use(express.static('public'))
+export function createWarBaseServer(options = {}) {
+    const port = options.port ?? DEFAULT_PORT
+    const logger = options.logger || console
+    const exit = options.exit || process.exit
+    const shutdownTimeoutMs = options.shutdownTimeoutMs || 5000
+    const logsDirectory = options.logsDirectory || path.join(process.cwd(), 'logs', 'rooms')
+    const game = options.game || createGame()
+    const createSockets = options.createSockets || (httpServer => new Server(httpServer))
+    const app = express()
+    const server = http.createServer(app)
+    const sockets = createSockets(server)
 
-const logsDirectory = path.join(process.cwd(), 'logs', 'rooms')
-fs.mkdirSync(logsDirectory, { recursive: true })
+    app.get('/health', (request, response) => {
+        response.json({ status: 'ok' })
+    })
 
-const game = createGame()
-game.start()
+    app.use(express.static('public'))
+    fs.mkdirSync(logsDirectory, { recursive: true })
+    game.start()
 
-game.subscribe((command) => {
+    const appendRoomLog = (hostKey, event, details = {}) => appendRoomLogEntry(logsDirectory, hostKey, event, details, logger)
+
+    game.subscribe(command => emitGameCommand(command, sockets, appendRoomLog))
+    game.subscribeDebug(entry => {
+        appendRoomLog(entry.hostKey, 'game:' + entry.event, {
+            tick: entry.tick,
+            gameAt: entry.at,
+            details: entry.details,
+        })
+    })
+
+    sockets.on('connection', socket => registerSocketHandlers(socket, game, appendRoomLog, logger))
+
+    let shuttingDown = false
+
+    function listen(callback) {
+        return server.listen(port, () => {
+            logger.log('> Server listening on port: ' + port)
+
+            if (callback) {
+                callback()
+            }
+        })
+    }
+
+    function shutdown(signal) {
+        if (shuttingDown) {
+            return
+        }
+
+        shuttingDown = true
+        logger.log('> ' + signal + ' received. Closing server...')
+
+        const forceExit = setTimeout(() => {
+            logger.error('> Forced shutdown after timeout')
+            exit(1)
+        }, shutdownTimeoutMs)
+        forceExit.unref()
+
+        sockets.close(() => {
+            clearTimeout(forceExit)
+            logger.log('> Server closed')
+            exit(0)
+        })
+    }
+
+    return {
+        app,
+        server,
+        sockets,
+        game,
+        logsDirectory,
+        port,
+        listen,
+        shutdown,
+        appendRoomLog,
+    }
+}
+
+export function emitGameCommand(command, sockets, appendRoomLog) {
     if (command.hostKey) {
         appendRoomLog(command.hostKey, 'socket:emit', {
             type: command.type,
@@ -31,19 +100,11 @@ game.subscribe((command) => {
     if (command.playerId) {
         sockets.to(command.playerId).emit(command.type, command)
     }
-})
+}
 
-game.subscribeDebug((entry) => {
-    appendRoomLog(entry.hostKey, 'game:' + entry.event, {
-        tick: entry.tick,
-        gameAt: entry.at,
-        details: entry.details,
-    })
-})
-
-sockets.on('connection', (socket) => {
+export function registerSocketHandlers(socket, game, appendRoomLog, logger = console) {
     const playerId = socket.id
-    console.log(`> Player connected: ${playerId}`)
+    logger.log(`> Player connected: ${playerId}`)
 
     socket.on('create-match', (command = {}) => {
         const result = game.createMatch({
@@ -58,7 +119,7 @@ sockets.on('connection', (socket) => {
 
         socket.join(result.hostKey)
         socket.emit('setup', result)
-        console.log(`> ${playerId} created room ${result.hostKey}`)
+        logger.log(`> ${playerId} created room ${result.hostKey}`)
     })
 
     socket.on('join-match', (command = {}) => {
@@ -90,7 +151,7 @@ sockets.on('connection', (socket) => {
 
         socket.join(result.hostKey)
         socket.emit('setup', result)
-        console.log(`> ${playerId} joined room ${result.hostKey}`)
+        logger.log(`> ${playerId} joined room ${result.hostKey}`)
     })
 
     socket.on('move-player', (command = {}) => {
@@ -125,15 +186,11 @@ sockets.on('connection', (socket) => {
         const hostKey = game.getHostKeyForPlayer(playerId)
         appendRoomLog(hostKey, 'socket:disconnect', { playerId })
         game.disconnectPlayer({ playerId })
-        console.log(`> Player disconnected: ${playerId}`)
+        logger.log(`> Player disconnected: ${playerId}`)
     })
-})
+}
 
-server.listen(PORT, () => {
-    console.log('> Server listening on port: ' + PORT)
-})
-
-function appendRoomLog(hostKey, event, details = {}) {
+export function appendRoomLogEntry(logsDirectory, hostKey, event, details = {}, logger = console) {
     const safeHostKey = normalizeHostKey(hostKey)
 
     if (!safeHostKey) {
@@ -150,13 +207,27 @@ function appendRoomLog(hostKey, event, details = {}) {
     try {
         fs.appendFileSync(logFile, JSON.stringify(entry) + '\n')
     } catch (error) {
-        console.error('> Failed to write room log', safeHostKey, error)
+        logger.error('> Failed to write room log', safeHostKey, error)
     }
 }
 
-function normalizeHostKey(hostKey) {
+export function normalizeHostKey(hostKey) {
     return String(hostKey || '')
         .trim()
         .toUpperCase()
         .replace(/[^A-Z0-9_-]/g, '')
+}
+
+function isMainModule() {
+    return process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+}
+
+/* istanbul ignore next -- process entrypoint is exercised by running `npm start`; unit tests cover the server factory. */
+if (isMainModule()) {
+    const warBaseServer = createWarBaseServer()
+
+    process.on('SIGINT', () => warBaseServer.shutdown('SIGINT'))
+    process.on('SIGTERM', () => warBaseServer.shutdown('SIGTERM'))
+
+    warBaseServer.listen()
 }

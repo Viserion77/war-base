@@ -949,3 +949,37 @@ function escapeHtml(value) {
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;')
 }
+
+
+export const __renderTestables = {
+    captureStatusPanel,
+    getCaptureStatus,
+    buildButton,
+    researchButton,
+    getResearchDisabledReason,
+    npcButton,
+    getSpawnNpcDisabledReason,
+    selectedPanel,
+    getUpgradeDisabledReason,
+    getCaptureDisabledReason,
+    playersList,
+    logsList,
+    getBuildDisabledReason,
+    getBuildRequirementMessage,
+    getPlacementStatus,
+    getSelectionColor,
+    canBuild,
+    highestStructureLevel,
+    getSelectedStructure,
+    getActorAt,
+    playerStatusLabel,
+    getRespawnRemainingSeconds,
+    isAvatarAvailable,
+    isNearOwnedAnchor,
+    isInsideMap,
+    distance,
+    getStructureWeight,
+    formatNumber,
+    hexToRgba,
+    escapeHtml,
+}
