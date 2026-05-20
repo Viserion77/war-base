@@ -53,7 +53,8 @@
 
         .brand {
             display: flex;
-            align-items: baseline;
+            align-items: center;
+            flex-wrap: wrap;
             gap: 10px;
         }
 
@@ -67,6 +68,22 @@
         .brand span {
             color: var(--muted);
             font-size: 0.92rem;
+        }
+
+        .room-copy-button {
+            min-height: 28px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fffdf8;
+            color: var(--coal);
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 900;
+            padding: 0 8px;
+        }
+
+        .room-copy-button:hover {
+            filter: brightness(0.96);
         }
 
         .connection-status {
@@ -504,6 +521,7 @@
             <div class="brand">
                 <h1>War Base</h1>
                 <span id="room-label">sem sala</span>
+                <button id="copy-room-key" class="room-copy-button" type="button" title="Copiar HostKey" aria-label="Copiar HostKey" hidden>Copiar</button>
             </div>
             <div id="connection-status" class="connection-status">conectando</div>
         </header>
@@ -586,7 +604,9 @@
         const screen = document.getElementById('screen')
         const hud = document.getElementById('hud')
         const roomLabel = document.getElementById('room-label')
+        const copyRoomKeyButton = document.getElementById('copy-room-key')
         const connectionStatus = document.getElementById('connection-status')
+        let copyFeedbackTimeout = null
 
         socket.on('connect', () => {
             connectionStatus.textContent = 'online'
@@ -634,11 +654,24 @@
             }
 
             game.setState(command.state)
-            roomLabel.textContent = `sala ${game.state.hostKey}`
+            updateRoomHeader()
         })
 
         socket.on('join-error', (result) => {
             lobbyError.textContent = result.error || 'Nao foi possivel entrar.'
+        })
+
+        copyRoomKeyButton.addEventListener('click', async () => {
+            if (!game.state.hostKey) {
+                return
+            }
+
+            try {
+                await copyText(game.state.hostKey)
+                showCopyFeedback('Copiado')
+            } catch (error) {
+                showCopyFeedback('Falhou')
+            }
         })
 
         screen.addEventListener('click', (event) => {
@@ -804,7 +837,7 @@
         function enterGame() {
             lobby.classList.add('hidden')
             gameView.classList.remove('hidden')
-            roomLabel.textContent = `sala ${game.state.hostKey}`
+            updateRoomHeader()
             setupScreen(screen, game)
 
             if (!renderStarted) {
@@ -812,6 +845,46 @@
                 renderStarted = true
             }
         }
+
+        function updateRoomHeader() {
+            const hasRoom = Boolean(game.state.hostKey)
+            roomLabel.textContent = hasRoom ? `sala ${game.state.hostKey}` : 'sem sala'
+            copyRoomKeyButton.hidden = !hasRoom
+        }
+
+        async function copyText(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text)
+                return
+            }
+
+            const field = document.createElement('textarea')
+            field.value = text
+            field.setAttribute('readonly', '')
+            field.style.position = 'fixed'
+            field.style.opacity = '0'
+            document.body.appendChild(field)
+            field.select()
+
+            try {
+                const copied = document.execCommand('copy')
+
+                if (!copied) {
+                    throw new Error('Nao foi possivel copiar.')
+                }
+            } finally {
+                document.body.removeChild(field)
+            }
+        }
+
+        function showCopyFeedback(message) {
+            copyRoomKeyButton.textContent = message
+            clearTimeout(copyFeedbackTimeout)
+            copyFeedbackTimeout = setTimeout(() => {
+                copyRoomKeyButton.textContent = 'Copiar'
+            }, 1400)
+        }
+
     </script>
 </body>
 
