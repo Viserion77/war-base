@@ -438,7 +438,7 @@ function updateHud(hud, game, currentPlayerId, uiState) {
         <section class="panel">
             <div class="panel-title">Acoes</div>
             ${selectedPanel(game, currentPlayer, selectedStructure, uiState)}
-            <button class="action-button" data-action="spawn-npc" data-npc="zunim" ${canSpawnNpc(game, currentPlayer) ? '' : 'disabled'}>Zunim ${game.state.catalog.npcs.zunim.cost}</button>
+            ${npcButton(game, currentPlayer, 'zunim')}
         </section>
         <section class="panel">
             <div class="panel-title">Jogadores</div>
@@ -509,12 +509,78 @@ function buildButton(game, player, uiState, type) {
 
 function researchButton(game, player, recipe) {
     const research = game.state.catalog.research[recipe]
-    const taraqueLevel = highestStructureLevel(game.state, player.playerId, 'taraque')
-    const enabled = !player.unlocked[recipe]
-        && player.knowledge >= research.cost
-        && taraqueLevel >= research.requiresTaraqueLevel
+    const disabledReason = getResearchDisabledReason(game, player, recipe)
+    const enabled = !disabledReason
+    const title = disabledReason ? ` title="${escapeHtml(disabledReason)}"` : ''
+    const label = research ? research.label : recipe
+    const cost = research ? ` ${research.cost}` : ''
 
-    return `<button class="action-button" data-action="research" data-recipe="${recipe}" ${enabled ? '' : 'disabled'}>${research.label} ${research.cost}</button>`
+    return `<button class="action-button" data-action="research" data-recipe="${recipe}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
+}
+
+function getResearchDisabledReason(game, player, recipe) {
+    const research = game.state.catalog.research[recipe]
+
+    if (!research) {
+        return 'Pesquisa indisponivel.'
+    }
+
+    if (!player || !player.alive) {
+        return 'Jogador fora da partida.'
+    }
+
+    if (player.unlocked[recipe]) {
+        return `${research.label} ja pesquisada.`
+    }
+
+    const taraqueLevel = highestStructureLevel(game.state, player.playerId, 'taraque')
+
+    if (taraqueLevel < research.requiresTaraqueLevel) {
+        return `${research.label} requer Taraque nivel ${research.requiresTaraqueLevel}.`
+    }
+
+    if (player.knowledge < research.cost) {
+        return `Conhecimento insuficiente: precisa de ${research.cost}.`
+    }
+
+    return ''
+}
+
+function npcButton(game, player, npcType) {
+    const npc = game.state.catalog.npcs[npcType]
+    const disabledReason = getSpawnNpcDisabledReason(game, player, npcType)
+    const enabled = !disabledReason
+    const title = disabledReason ? ` title="${escapeHtml(disabledReason)}"` : ''
+    const label = npc ? npc.label : npcType
+    const cost = npc ? ` ${npc.cost}` : ''
+
+    return `<button class="action-button" data-action="spawn-npc" data-npc="${npcType}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
+}
+
+function getSpawnNpcDisabledReason(game, player, npcType) {
+    const npc = game.state.catalog.npcs[npcType]
+
+    if (!npc) {
+        return 'NPC indisponivel.'
+    }
+
+    if (!player || !player.alive) {
+        return 'Jogador fora da partida.'
+    }
+
+    if (!player.unlocked.tujai) {
+        return 'Pesquise Tujai primeiro.'
+    }
+
+    if (highestStructureLevel(game.state, player.playerId, 'tujai') <= 0) {
+        return 'Construa uma Tujai ativa primeiro.'
+    }
+
+    if (player.coal < npc.cost) {
+        return `Carvao insuficiente: precisa de ${npc.cost}.`
+    }
+
+    return ''
 }
 
 function selectedPanel(game, player, selectedStructure, uiState) {
@@ -759,11 +825,6 @@ function canBuild(game, player, type) {
     return Boolean(player.unlocked[type])
 }
 
-function canSpawnNpc(game, player) {
-    return player.unlocked.tujai
-        && player.coal >= game.state.catalog.npcs.zunim.cost
-        && highestStructureLevel(game.state, player.playerId, 'tujai') > 0
-}
 
 function highestStructureLevel(state, playerId, type) {
     return Object.values(state.structures || {})
