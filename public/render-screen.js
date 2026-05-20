@@ -443,6 +443,7 @@ function updateHud(hud, game, currentPlayerId, uiState) {
         <section class="panel">
             <div class="panel-title">Jogadores</div>
             <div class="players-list">${playersList(game, currentPlayerId)}</div>
+            ${addAiButton()}
         </section>
         <section class="panel log-panel">
             <div class="panel-title">Eventos</div>
@@ -555,6 +556,10 @@ function npcButton(game, player, npcType) {
     const cost = npc ? ` ${npc.cost}` : ''
 
     return `<button class="action-button" data-action="spawn-npc" data-npc="${npcType}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
+}
+
+function addAiButton() {
+    return '<button class="action-button add-ai-button" type="button" data-action="add-ai" title="IA em desenvolvimento." disabled>Adicionar uma IA</button>'
 }
 
 function getSpawnNpcDisabledReason(game, player, npcType) {
@@ -958,6 +963,7 @@ export const __renderTestables = {
     researchButton,
     getResearchDisabledReason,
     npcButton,
+    addAiButton,
     getSpawnNpcDisabledReason,
     selectedPanel,
     getUpgradeDisabledReason,

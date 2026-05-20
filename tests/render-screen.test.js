@@ -180,6 +180,8 @@ describe('render-screen', () => {
         expect(hud.innerHTML).toContain('Sala ABCDE')
         expect(hud.innerHTML).toContain('Vencedor: &lt;Alice&gt;')
         expect(hud.innerHTML).toContain('Capturando Cover')
+        expect(hud.innerHTML).toContain('Adicionar uma IA')
+        expect(hud.innerHTML).toContain('data-action="add-ai" title="IA em desenvolvimento." disabled')
         expect(hud.innerHTML).toContain('&lt;evento&gt;')
     })
 
