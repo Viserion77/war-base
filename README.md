@@ -1,111 +1,183 @@
-# war-base
+# War Base
 
-O projeto é um jogo multiplayer **FFA (free-for-all)** de bases, onde 3 ou mais jogadores constroem, capturam fábricas, atacam uns aos outros e tentam ser o último com a base de pé.
+War Base é um jogo multiplayer FFA (free-for-all) de bases. Cada jogador administra uma base, constrói estruturas, captura fábricas, pesquisa tecnologias, envia unidades e tenta ser o último com a base ativa.
 
 ![Fluxograma do jogo](fluxograma.png)
 
-Visão geral
-===============================
-Cada jogador controla uma **Base** com construções ao redor. Você coleta **carvão** (recurso bruto) com fábricas Cover, gera **conhecimento** na Taraque para destravar construções de ataque, e usa Per/Hef/Tujai para defender ou pressionar inimigos. Quem ficar com a vida da base zerada está fora. O último jogador com base ativa vence.
+## Como Rodar
 
-Como entrar em uma partida
--------------------------------
-- **Criar partida**: o jogador informa um *GamerTag* e o servidor gera uma **hostKey** (código de sala privada). A base é criada com **750 carvões** iniciais.
-- **Entrar em partida**: o jogador informa *GamerTag* + uma **hostKey** existente. Sem a hostKey correta não é possível entrar — partidas são privadas.
+Instale as dependências:
 
-Loop de jogo
--------------------------------
-A cada ação do jogador, o servidor avalia (em ordem):
-1. **Subiu uma estrutura de nível?** → atualiza status da estrutura e desbloqueia recursos/construções dependentes.
-2. **Entrou no range de captura de uma fábrica neutra/desativada?** → contabiliza o tempo até **100% (30 segundos parado no range)** e captura a fábrica.
-3. **Adicionou nova construção?** → coloca no terreno e atualiza status.
-4. **Entrou no range de ataque de um inimigo?** → a torre inimiga usa seu status de arma para remover vida do jogador.
-5. **Comprou ataque (torre) ou NPC?** → dropa a construção/unidade no mapa.
-6. **Ataque ou NPC zerou a vida de uma construção?** → a construção é desativada e fica disponível para captura.
-7. **Comprou upgrade em uma construção?** → aplica o upgrade (paga custo do próximo nível).
-8. **Ataque ou NPC zerou a vida de uma base?** → o dono daquela base é declarado **perdedor** e sai da partida.
+```bash
+npm install
+```
 
-Quando sobrar **apenas um jogador com base ativa**, ele é o vencedor.
+Inicie o servidor:
 
-Mecânicas
-===============================
-Recursos
--------------------------------
-- **Carvão**: recurso principal. Usado para construir, comprar NPCs e fazer upgrades. Gerado pela Cover.
-- **Conhecimento**: recurso de tecnologia. Gerado pela Taraque. Usado para destravar receitas de construção de ataque (Per, Hef, Tujai) na própria Taraque.
+```bash
+npm start
+```
 
-Combate
--------------------------------
-- **Barreira** absorve o dano até zerar; depois, o dano vai para a **integridade**.
-- **Barreira regenera lentamente** quando a unidade/estrutura **não está sob ataque**. A regeneração é pausada enquanto está recebendo dano.
-- Quando a integridade chega a 0, a estrutura é destruída (ou, no caso da base, o jogador perde).
-- **Torres atiram a cada 1 segundo** enquanto há alvo no range. O valor declarado de "dano" é o dano por tiro.
+Acesse a partida em `http://localhost:4000`. O servidor usa a porta `4000`; se ela já estiver ocupada, finalize o processo antigo antes de iniciar outro.
 
-Upgrades
--------------------------------
-- Subir uma construção de nível custa **1.5× o custo do nível atual** (arredondando para inteiro).
-  - Ex.: Cover nível 1 = 540 → nível 2 = 810 → nível 3 = 1215 → ...
-- Cada nível adiciona os bônus listados em cada construção (ver abaixo).
+## Como Entrar
 
-Captura de fábricas
--------------------------------
-- Quando uma construção tem a integridade zerada, ela **fica desativada e capturável**.
-- Qualquer jogador que permanecer **30 segundos parado dentro do range da fábrica** se torna o novo dono e a reativa.
+- **Criar partida**: informe um GamerTag e o servidor gera uma HostKey de sala privada.
+- **Entrar em partida**: informe GamerTag e uma HostKey existente.
+- Cada jogador começa com uma Base e 750 carvões.
 
-Construções
-===============================
-Base
--------------------------------
-- 1000 pontos de integridade iniciais
-- 500 pontos de barreira iniciais
-- +25 de integridade e +25 de barreira por nível
-- Subir a Base de nível desbloqueia construções (ex.: Taraque exige Base nível 2)
+## Objetivo
 
-Fábricas e Pesquisas
--------------------------------
-**Cover** (geração de carvão)
-- Custa **540**, nível 1
-- Coleta carvão automaticamente
-- Começa em **+20 carvões por segundo**
-- **+5 carvões/segundo por nível**
+Proteja sua Base. Quando a integridade de uma Base chega a 0, o dono é eliminado e todas as suas estruturas/unidades saem do jogo. Quando sobra apenas um jogador com Base ativa, ele vence.
 
-**Taraque** (loja de conhecimento)
-- Desbloqueada com **Base nível 2**
-- Gera e armazena conhecimento, e funciona como loja para pagar pelas receitas de construção:
-  - **Nível 1**: Per, Hef
-  - **Nível 2**: Tujai
+## Gameplay Atual
 
-Ataque e defesa
--------------------------------
-**Per** — torre de "pistola" (dano singular)
-- Custa **140**, nível 1
-- 500 de integridade
-- 0 de barreira
-- 5 de dano singular (por tiro, 1 tiro/segundo)
-- 20 de alcance
+O jogador não é mais controlado diretamente por WASD como uma entidade no mapa. O jogador funciona como comandante da Base: seleciona terrenos/construções e emite ordens.
 
-**Hef** — torre de "bombinhas" (dano em área)
-- Custa **200**, nível 1
-- 200 de integridade
-- 100 de barreira
-- 15 de dano múltiplo (por tiro, 1 tiro/segundo)
-- 10 de alcance
+Para capturar uma fábrica neutra ou desativada:
 
-**Tujai** — fábrica de NPCs
-- Custa **600**, nível 1
-- 200 de integridade
-- 0 de barreira
-- Permite a compra de NPCs ofensivos
+1. Clique em uma construção capturável.
+2. Use o botão **Iniciar captura** ou o atalho `D`.
+3. A Base envia automaticamente um **Capturador**.
+4. O Capturador caminha sozinho até o alvo.
+5. Ao entrar no alcance de captura, ele começa a capturar.
+6. Se outro Capturador estiver influenciando a captura, eles podem se atacar.
+7. Após 30 segundos de progresso, a construção muda de dono e é reativada.
 
-NPCs
-===============================
-NPCs são **unidades ofensivas autônomas**, compradas na Tujai. Após o spawn, andam sozinhos até a **base inimiga mais próxima** e atacam até morrer (ou até destruir a base).
+Se o Capturador morrer, ele fica fora por 30 segundos e reaparece perto da Base.
 
-**Zunim** — unidade básica de assalto
-- Custa **80**, nível 1
-- 150 de integridade
-- 50 de barreira
-- 10 de dano singular (por ataque, 1 ataque/segundo)
-- 1 de alcance (corpo a corpo)
-- Velocidade: 1 campo por segundo
-- +10 de integridade, +5 de barreira e +2 de dano por nível da Tujai
+## Atalhos
+
+- `W`: upar a construção selecionada.
+- `A`: construir Cover no terreno selecionado.
+- `S`: enviar Zunim, se Tujai estiver ativa e houver carvão.
+- `D`: iniciar captura do alvo capturável; se não houver alvo capturável selecionado, foca a Base.
+- `Esc`: limpa a seleção.
+- Clique no mapa: seleciona terreno ou construção.
+
+## Loop Do Servidor
+
+A cada tick, o servidor processa:
+
+1. Respawns de Capturadores que morreram e já cumpriram 30 segundos.
+2. Geração de recursos por estruturas ativas.
+3. Regeneração de barreiras de estruturas e unidades fora de combate.
+4. Ordens dos Capturadores, incluindo movimento, ataque e aproximação para captura.
+5. Progresso de captura de estruturas desativadas.
+6. Ataques automáticos de torres.
+7. Movimento/ataque de NPCs ofensivos, como Zunim.
+8. Condição de vitória.
+
+## Recursos
+
+- **Carvão**: recurso principal. Usado para construir, comprar NPCs e fazer upgrades. Gerado por Cover.
+- **Conhecimento**: recurso de tecnologia. Gerado por Taraque. Usado para pesquisar Per, Hef e Tujai.
+
+## Combate
+
+- Barreira absorve dano primeiro; depois o dano vai para integridade.
+- Barreira regenera quando a entidade não recebe dano por alguns segundos.
+- Torres atacam automaticamente inimigos no alcance a cada 1 segundo.
+- Estruturas comuns zeradas ficam desativadas e capturáveis.
+- Bases zeradas eliminam o jogador.
+
+## Captura
+
+- Só estruturas marcadas como capturáveis podem receber ordem de captura.
+- A Base não é capturável; ela deve ser destruída.
+- O Capturador tem 160 de integridade, 40 de barreira, 20 de dano e 1.5 de alcance.
+- O Capturador nasce perto da Base, anda 1 campo por tick e captura quando fica dentro do alcance.
+- Capturadores inimigos próximos ao mesmo ponto disputado podem lutar entre si.
+- A captura leva 30 segundos de progresso.
+
+## Construções
+
+### Base
+
+- 1000 de integridade inicial.
+- 500 de barreira inicial.
+- +25 de integridade e +25 de barreira por nível.
+- Base nível 2 desbloqueia Taraque.
+- Não é capturável.
+
+### Cover
+
+- Custa 540 carvões.
+- Gera carvão automaticamente.
+- Começa em +20 carvões por segundo.
+- +5 carvões por segundo por nível.
+- Capturável quando desativada/neutra.
+
+### Taraque
+
+- Exige Base nível 2.
+- Gera conhecimento.
+- Permite pesquisas:
+  - Nível 1: Per e Hef.
+  - Nível 2: Tujai.
+
+### Per
+
+- Torre de dano único.
+- Custa 140 carvões.
+- 500 de integridade.
+- 0 de barreira.
+- 5 de dano por tiro.
+- 20 de alcance.
+
+### Hef
+
+- Torre de dano em área.
+- Custa 200 carvões.
+- 200 de integridade.
+- 100 de barreira.
+- 15 de dano por tiro.
+- 10 de alcance.
+
+### Tujai
+
+- Fábrica de NPCs ofensivos.
+- Custa 600 carvões.
+- 200 de integridade.
+- 0 de barreira.
+- Permite enviar Zunim depois da pesquisa Tujai.
+
+## Unidades
+
+### Capturador
+
+- Unidade automática enviada pela Base ao iniciar captura.
+- Custo 0.
+- 160 de integridade.
+- 40 de barreira.
+- 20 de dano.
+- 1.5 de alcance.
+- Reaparece na Base 30 segundos após morrer.
+
+### Zunim
+
+- Unidade ofensiva comprada pela Tujai.
+- Custa 80 carvões.
+- 150 de integridade.
+- 50 de barreira.
+- 10 de dano.
+- 1 de alcance.
+- Anda sozinho até a Base inimiga mais próxima.
+- Ganha +10 de integridade, +5 de barreira e +2 de dano por nível da Tujai.
+
+## Desenvolvimento
+
+Arquivos principais:
+
+- `server.js`: servidor Express + Socket.IO.
+- `public/game.js`: estado, regras e simulação do jogo.
+- `public/render-screen.js`: renderização do canvas e HUD.
+- `public/index.html`: layout, estilos e handlers de UI.
+
+Comandos úteis:
+
+```bash
+npm start
+node --check public/game.js
+node --check public/render-screen.js
+```

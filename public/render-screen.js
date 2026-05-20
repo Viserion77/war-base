@@ -339,7 +339,18 @@ function drawUnits(context, game) {
         context.fill()
         context.stroke()
         context.fillStyle = '#f6f0d8'
-        context.fillRect(x - radius * 0.35, y - radius * 0.2, radius * 0.7, radius * 0.4)
+
+        if (unit.type === 'capturer') {
+            context.beginPath()
+            context.moveTo(x, y - radius * 0.62)
+            context.lineTo(x + radius * 0.54, y + radius * 0.46)
+            context.lineTo(x - radius * 0.54, y + radius * 0.46)
+            context.closePath()
+            context.fill()
+        } else {
+            context.fillRect(x - radius * 0.35, y - radius * 0.2, radius * 0.7, radius * 0.4)
+        }
+
         drawBars(context, unit.x * pixelsPerFields, unit.y * pixelsPerFields, pixelsPerFields, unit)
         context.restore()
     }
@@ -351,7 +362,7 @@ function drawPlayers(context, game, currentPlayerId) {
     for (const playerId in game.state.players) {
         const player = game.state.players[playerId]
 
-        if (!player.alive) {
+        if (!isAvatarAvailable(player)) {
             continue
         }
 
@@ -370,6 +381,7 @@ function drawPlayers(context, game, currentPlayerId) {
         context.closePath()
         context.fill()
         context.stroke()
+        drawBars(context, player.x * pixelsPerFields, player.y * pixelsPerFields, pixelsPerFields, player)
         context.restore()
     }
 }
@@ -401,6 +413,7 @@ function updateHud(hud, game, currentPlayerId, uiState) {
                 <span><b>${formatNumber(currentPlayer.coal)}</b><small>Carvao</small></span>
                 <span><b>${formatNumber(currentPlayer.knowledge)}</b><small>Conhecimento</small></span>
                 <span><b>${currentPlayer.alive ? 'Ativa' : 'Fora'}</b><small>Base</small></span>
+                <span><b>${playerStatusLabel(currentPlayer)}</b><small>Unidade</small></span>
             </div>
             ${captureStatusPanel(captureStatus)}
         </section>
@@ -457,7 +470,7 @@ function captureStatusPanel(captureStatus) {
             <div class="capture-meter" aria-hidden="true">
                 <span style="width: ${captureStatus.percent}%"></span>
             </div>
-            <small>${captureStatus.elapsedSeconds}/${captureStatus.totalSeconds}s - fique parado para concluir.</small>
+            <small>${captureStatus.elapsedSeconds}/${captureStatus.totalSeconds}s - ordem ativa ate concluir.</small>
         </div>
     `
 }
@@ -527,13 +540,24 @@ function selectedPanel(game, player, selectedStructure, uiState) {
     const upgradeDisabledReason = getUpgradeDisabledReason(player, selectedStructure, upgradeCost)
     const canUpgrade = !upgradeDisabledReason
     const title = upgradeDisabledReason ? ` title="${escapeHtml(upgradeDisabledReason)}"` : ''
+    const captureDisabledReason = getCaptureDisabledReason(game, player, selectedStructure)
+    const captureTitle = captureDisabledReason ? ' title="' + escapeHtml(captureDisabledReason) + '"' : ''
+    const canCapture = !captureDisabledReason
+    const captureButton = catalog.captureable
+        ? '<button class="action-button" data-action="capture" data-structure-id="' + selectedStructure.structureId + '"' + captureTitle + ' ' + (canCapture ? '' : 'disabled') + '>Iniciar captura</button>'
+        : ''
+    const orderStatus = player.order && player.order.type === 'capture' && player.order.structureId === selectedStructure.structureId
+        ? '<span class="tile-status tile-status-available">Ordem de captura ativa</span>'
+        : ''
 
     return `
         <div class="selected-card">
             <strong>${catalog.label} N${selectedStructure.level}</strong>
             <span>${escapeHtml(ownerName)}</span>
             <span>${Math.max(0, Math.ceil(selectedStructure.integrity))}/${selectedStructure.maxIntegrity} HP</span>
+            ${orderStatus}
             <button class="action-button" data-action="upgrade" data-structure-id="${selectedStructure.structureId}"${title} ${canUpgrade ? '' : 'disabled'}>Upgrade ${upgradeCost}</button>
+            ${captureButton}
         </div>
     `
 }
@@ -554,13 +578,43 @@ function getUpgradeDisabledReason(player, structure, cost) {
     return ''
 }
 
+function getCaptureDisabledReason(game, player, structure) {
+    const catalog = game.state.catalog.structures[structure.type]
+
+    if (!catalog || !catalog.captureable) {
+        return 'Esta construcao nao pode ser capturada.'
+    }
+
+    if (!player || !player.alive) {
+        return 'Jogador fora da partida.'
+    }
+
+    if (player.respawnAt) {
+        return 'Avatar reaparece em ' + getRespawnRemainingSeconds(player) + 's.'
+    }
+
+    if (structure.ownerId === player.playerId && !structure.disabled) {
+        return 'Esta construcao ja e sua.'
+    }
+
+    if (structure.ownerId === player.playerId && structure.disabled) {
+        return 'Construcao sua desativada.'
+    }
+
+    if (player.order && player.order.type === 'capture' && player.order.structureId === structure.structureId) {
+        return 'Ordem de captura ja ativa.'
+    }
+
+    return ''
+}
+
 function playersList(game, currentPlayerId) {
     return Object.values(game.state.players)
         .map(player => `
             <div class="player-row ${player.playerId === currentPlayerId ? 'current' : ''}">
                 <span class="player-dot" style="background:${player.color}"></span>
                 <span>${escapeHtml(player.gamerTag)}</span>
-                <small>${player.alive ? 'ativa' : 'fora'}</small>
+                <small>${playerStatusLabel(player)}</small>
             </div>
         `)
         .join('')
@@ -733,7 +787,7 @@ function getSelectedStructure(state, uiState) {
 
 function getActorAt(state, x, y) {
     const player = Object.values(state.players || {})
-        .find(candidate => candidate.alive
+        .find(candidate => isAvatarAvailable(candidate)
             && candidate.x === x
             && candidate.y === y)
 
@@ -743,6 +797,38 @@ function getActorAt(state, x, y) {
 
     return Object.values(state.units || {})
         .find(unit => unit.x === x && unit.y === y) || null
+}
+
+function playerStatusLabel(player) {
+    if (!player || !player.alive) {
+        return 'fora'
+    }
+
+    if (player.respawnAt) {
+        return 'respawn ' + getRespawnRemainingSeconds(player) + 's'
+    }
+
+    if (!player.activeCaptureUnitId && player.avatarDeployed === false) {
+        return 'pronta'
+    }
+
+    if (typeof player.integrity === 'number' && typeof player.maxIntegrity === 'number') {
+        return Math.max(0, Math.ceil(player.integrity)) + '/' + player.maxIntegrity + ' HP'
+    }
+
+    return 'ativa'
+}
+
+function getRespawnRemainingSeconds(player) {
+    if (!player || !player.respawnAt) {
+        return 0
+    }
+
+    return Math.max(0, Math.ceil((player.respawnAt - Date.now()) / 1000))
+}
+
+function isAvatarAvailable(player) {
+    return Boolean(player && player.alive && player.avatarDeployed !== false && !player.respawnAt && player.integrity > 0)
 }
 
 function isNearOwnedAnchor(state, playerId, x, y) {

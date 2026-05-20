@@ -9,6 +9,12 @@ const CONFIG = {
     captureDurationMs: 30000,
     captureRange: 2,
     buildRange: 6,
+    respawnDelayMs: 30000,
+    playerMaxIntegrity: 160,
+    playerMaxBarrier: 40,
+    playerDamage: 20,
+    playerAttackRange: 1.5,
+    playerAttackEveryMs: 1000,
     tickRateMs: 1000,
     shieldRegenDelayMs: 3000,
     shieldRegenPerSecond: 8,
@@ -103,6 +109,16 @@ const RESEARCH = {
 }
 
 const NPCS = {
+    capturer: {
+        label: 'Capturador',
+        cost: 0,
+        integrity: 160,
+        barrier: 40,
+        damage: 20,
+        attackRange: 1.5,
+        attackEveryMs: 1000,
+        speed: 1,
+    },
     zunim: {
         label: 'Zunim',
         cost: 80,
@@ -318,11 +334,11 @@ export default function createGame() {
         }
 
         const player = room.players[command.playerId]
-        if (!player || !player.alive) {
+        if (!player || !isPlayerAvailable(player)) {
             debugLog(room, 'move:blocked', {
                 playerId: command.playerId,
                 keyPressed: command.keyPressed,
-                reason: player ? 'jogador fora da partida' : 'jogador nao encontrado',
+                reason: player ? 'jogador aguardando reaparecimento ou fora da partida' : 'jogador nao encontrado',
             })
             return
         }
@@ -432,6 +448,8 @@ export default function createGame() {
             changed = researchRecipe(room, player, command)
         } else if (command.action === 'spawn-npc') {
             changed = spawnNpc(room, player, command)
+        } else if (command.action === 'capture') {
+            changed = startCaptureOrder(room, player, command)
         } else {
             handled = false
             addLog(room, player.gamerTag + ': acao desconhecida: ' + (command.action || 'vazia') + '.')
@@ -504,6 +522,7 @@ export default function createGame() {
 
         room.players[playerId] = {
             playerId,
+            ownerId: playerId,
             gamerTag,
             color,
             x: spawn.playerX,
@@ -513,6 +532,14 @@ export default function createGame() {
             alive: true,
             connected: true,
             baseId: base.structureId,
+            maxIntegrity: CONFIG.playerMaxIntegrity,
+            integrity: CONFIG.playerMaxIntegrity,
+            maxBarrier: CONFIG.playerMaxBarrier,
+            barrier: CONFIG.playerMaxBarrier,
+            respawnAt: null,
+            order: null,
+            activeCaptureUnitId: null,
+            avatarDeployed: false,
             unlocked: {
                 cover: true,
                 taraque: false,
@@ -521,6 +548,8 @@ export default function createGame() {
                 tujai: false,
             },
             lastMovedAt: now,
+            lastAttackAt: 0,
+            lastDamagedAt: 0,
             joinedAt: now,
         }
     }
@@ -808,6 +837,262 @@ export default function createGame() {
         return true
     }
 
+
+    function startCaptureOrder(room, player, command) {
+        const structure = room.structures[command.structureId]
+
+        if (!structure) {
+            addLog(room, player.gamerTag + ': selecione uma construcao capturavel.')
+            return false
+        }
+
+        const catalog = STRUCTURES[structure.type]
+
+        if (!catalog || !catalog.captureable) {
+            addLog(room, player.gamerTag + ': esta construcao nao pode ser capturada.')
+            return false
+        }
+
+        if (!isPlayerCommandable(player)) {
+            addLog(room, player.gamerTag + ': aguarde o reaparecimento para iniciar captura.')
+            return false
+        }
+
+        if (structure.ownerId === player.playerId && !structure.disabled) {
+            addLog(room, player.gamerTag + ': esta construcao ja e sua.')
+            return false
+        }
+
+        if (structure.ownerId === player.playerId && structure.disabled) {
+            addLog(room, player.gamerTag + ': esta construcao sua esta desativada.')
+            return false
+        }
+
+        const captureUnit = getPlayerCaptureUnit(room, player) || spawnCaptureUnit(room, player)
+
+        if (!captureUnit) {
+            addLog(room, player.gamerTag + ': sem espaco livre perto da Base para enviar o Capturador.')
+            return false
+        }
+
+        const order = {
+            type: 'capture',
+            structureId: structure.structureId,
+            unitId: captureUnit.unitId,
+            createdAt: Date.now(),
+        }
+
+        captureUnit.order = order
+        player.order = order
+        player.activeCaptureUnitId = captureUnit.unitId
+        syncPlayerToCaptureUnit(player, captureUnit)
+        resetCapturesForPlayer(room, player.playerId)
+        addLog(room, player.gamerTag + ' enviou um Capturador para ' + catalog.label + '.')
+        return true
+    }
+
+    function spawnCaptureUnit(room, player) {
+        const spawnTile = getRespawnTile(room, player)
+
+        if (!spawnTile) {
+            return null
+        }
+
+        return createCaptureUnit(room, player, spawnTile)
+    }
+
+    function createCaptureUnit(room, player, spawnTile) {
+        const catalog = NPCS.capturer
+        const unitId = 'u-' + room.nextUnitId++
+        const unit = {
+            unitId,
+            ownerId: player.playerId,
+            playerId: player.playerId,
+            gamerTag: player.gamerTag,
+            type: 'capturer',
+            x: spawnTile.x,
+            y: spawnTile.y,
+            integrity: catalog.integrity,
+            maxIntegrity: catalog.integrity,
+            barrier: catalog.barrier,
+            maxBarrier: catalog.barrier,
+            damage: catalog.damage,
+            attackRange: catalog.attackRange,
+            attackEveryMs: catalog.attackEveryMs,
+            order: null,
+            lastAttackAt: 0,
+            lastDamagedAt: 0,
+            createdAt: Date.now(),
+        }
+
+        room.units[unitId] = unit
+        player.activeCaptureUnitId = unitId
+        player.avatarDeployed = false
+        syncPlayerToCaptureUnit(player, unit)
+        return unit
+    }
+
+    function processPlayerRespawns(room, now) {
+        let changed = false
+
+        for (const playerId in room.players) {
+            const player = room.players[playerId]
+
+            if (!player.alive || !player.respawnAt || now < player.respawnAt) {
+                continue
+            }
+
+            const captureUnit = spawnCaptureUnit(room, player)
+
+            if (!captureUnit) {
+                continue
+            }
+
+            player.respawnAt = null
+            player.order = null
+            syncPlayerToCaptureUnit(player, captureUnit)
+            addLog(room, player.gamerTag + ' reapareceu na base.')
+            changed = true
+        }
+
+        return changed
+    }
+
+    function processCaptureUnitOrders(room, now) {
+        let changed = false
+
+        for (const unitId in room.units) {
+            const unit = room.units[unitId]
+
+            if (unit.type !== 'capturer') {
+                continue
+            }
+
+            const player = room.players[unit.ownerId]
+
+            if (!player || !player.alive) {
+                delete room.units[unitId]
+                changed = true
+                continue
+            }
+
+            syncPlayerToCaptureUnit(player, unit)
+
+            if (!unit.order) {
+                continue
+            }
+
+            changed = processCaptureUnitOrder(room, unit, now) || changed
+        }
+
+        return changed
+    }
+
+    function processCaptureUnitOrder(room, unit, now) {
+        const structure = room.structures[unit.order.structureId]
+
+        if (!structure || !STRUCTURES[structure.type] || !STRUCTURES[structure.type].captureable) {
+            clearCaptureUnitOrder(room, unit)
+            return true
+        }
+
+        if (structure.ownerId === unit.ownerId && !structure.disabled) {
+            clearCaptureUnitOrder(room, unit)
+            return true
+        }
+
+        if (structure.disabled) {
+            const contestTarget = findCaptureUnitContestTarget(room, unit, structure)
+
+            if (contestTarget && distance(unit, structure) <= CONFIG.captureRange) {
+                if (distance(unit, contestTarget.value) <= unit.attackRange) {
+                    return attackWithUnit(room, unit, contestTarget, now)
+                }
+
+                return moveUnitToward(room, unit, contestTarget.value, unit.attackRange)
+            }
+
+            return moveUnitToward(room, unit, structure, CONFIG.captureRange)
+        }
+
+        if (structure.ownerId !== unit.ownerId) {
+            if (distance(unit, structure) <= unit.attackRange) {
+                return attackWithUnit(room, unit, { kind: 'structure', value: structure }, now)
+            }
+
+            return moveUnitToward(room, unit, structure, unit.attackRange)
+        }
+
+        return false
+    }
+
+    function findCaptureUnitContestTarget(room, unit, structure) {
+        const candidates = []
+
+        for (const unitId in room.units) {
+            const candidate = room.units[unitId]
+
+            if (candidate.unitId === unit.unitId || candidate.ownerId === unit.ownerId) {
+                continue
+            }
+
+            if (candidate.type === 'capturer' && distance(candidate, structure) <= CONFIG.captureRange) {
+                candidates.push({ kind: 'unit', value: candidate })
+            }
+        }
+
+        for (const playerId in room.players) {
+            const candidate = room.players[playerId]
+
+            if (candidate.playerId !== unit.ownerId && isPlayerAvailable(candidate) && distance(candidate, structure) <= CONFIG.captureRange) {
+                candidates.push({ kind: 'player', value: candidate })
+            }
+        }
+
+        candidates.sort((first, second) => distance(unit, first.value) - distance(unit, second.value))
+
+        return candidates[0] || null
+    }
+
+    function moveUnitToward(room, unit, target, minDistance) {
+        if (distance(unit, target) <= minDistance) {
+            return false
+        }
+
+        const nextTile = getStepToward(room, unit, target)
+
+        if (!nextTile) {
+            return false
+        }
+
+        unit.x = nextTile.x
+        unit.y = nextTile.y
+        syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
+        resetCapturesForPlayer(room, unit.ownerId)
+        return true
+    }
+
+    function attackWithUnit(room, unit, target, now) {
+        if (now - unit.lastAttackAt < unit.attackEveryMs) {
+            return false
+        }
+
+        unit.lastAttackAt = now
+        applyDamage(room, target, unit.damage, now, unit.ownerId)
+        syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
+        return true
+    }
+
+    function clearCaptureUnitOrder(room, unit) {
+        unit.order = null
+
+        const player = room.players[unit.ownerId]
+
+        if (player && player.order && player.order.unitId === unit.unitId) {
+            player.order = null
+        }
+    }
+
     function tickRoom(room, now) {
         let changed = false
 
@@ -818,8 +1103,10 @@ export default function createGame() {
             return false
         }
 
+        changed = processPlayerRespawns(room, now) || changed
         changed = generateResources(room) || changed
         changed = regenerateBarriers(room, now) || changed
+        changed = processCaptureUnitOrders(room, now) || changed
         changed = processCaptures(room) || changed
         changed = processTowerAttacks(room, now) || changed
         changed = processNpcActions(room, now) || changed
@@ -878,6 +1165,19 @@ export default function createGame() {
 
             if (now - unit.lastDamagedAt >= CONFIG.shieldRegenDelayMs) {
                 unit.barrier = Math.min(unit.maxBarrier, unit.barrier + CONFIG.shieldRegenPerSecond)
+                changed = true
+            }
+        }
+
+        for (const playerId in room.players) {
+            const player = room.players[playerId]
+
+            if (!isPlayerAvailable(player) || player.maxBarrier <= 0 || player.barrier >= player.maxBarrier) {
+                continue
+            }
+
+            if (now - player.lastDamagedAt >= CONFIG.shieldRegenDelayMs) {
+                player.barrier = Math.min(player.maxBarrier, player.barrier + CONFIG.shieldRegenPerSecond)
                 changed = true
             }
         }
@@ -981,6 +1281,10 @@ export default function createGame() {
                 continue
             }
 
+            if (unit.type === 'capturer') {
+                continue
+            }
+
             const targetBase = getNearestEnemyBase(room, unit.ownerId, unit.x, unit.y)
 
             if (!targetBase) {
@@ -1028,19 +1332,34 @@ export default function createGame() {
         return false
     }
 
-    function captureStructure(room, structure, player) {
+    function captureStructure(room, structure, capturer) {
+        const player = room.players[capturer.playerId || capturer.ownerId]
+
+        if (!player) {
+            return
+        }
+
         structure.ownerId = player.playerId
         structure.disabled = false
         structure.capture = null
         structure.integrity = Math.ceil(structure.maxIntegrity * 0.5)
         structure.barrier = Math.ceil(structure.maxBarrier * 0.5)
         structure.lastDamagedAt = Date.now()
-        addLog(room, `${player.gamerTag} capturou ${STRUCTURES[structure.type].label}.`)
+
+        if (capturer.order && capturer.order.type === 'capture' && capturer.order.structureId === structure.structureId) {
+            capturer.order = null
+        }
+
+        if (player.order && player.order.type === 'capture' && player.order.structureId === structure.structureId) {
+            player.order = null
+        }
+
+        addLog(room, player.gamerTag + ' capturou ' + STRUCTURES[structure.type].label + '.')
     }
 
     function applySplashDamage(room, sourceStructure, target, damage, now) {
         const splashTargets = collectDamageableTargets(room)
-            .filter(candidate => candidate.value.ownerId !== sourceStructure.ownerId)
+            .filter(candidate => getDamageableOwnerId(candidate) !== sourceStructure.ownerId)
             .filter(candidate => distance(candidate.value, target.value) <= STRUCTURES.hef.splashRadius)
 
         for (const splashTarget of splashTargets) {
@@ -1050,22 +1369,79 @@ export default function createGame() {
 
     function applyDamage(room, target, amount, now, attackerId) {
         if (target.kind === 'unit') {
-            applyDamageToUnit(room, target.value, amount, now)
+            applyDamageToUnit(room, target.value, amount, now, attackerId)
+            return
+        }
+
+        if (target.kind === 'player') {
+            applyDamageToPlayer(room, target.value, amount, now, attackerId)
             return
         }
 
         applyDamageToStructure(room, target.value, amount, now, attackerId)
     }
 
-    function applyDamageToUnit(room, unit, amount, now) {
+    function applyDamageToPlayer(room, player, amount, now, attackerId) {
+        if (!isPlayerAvailable(player)) {
+            return
+        }
+
+        const barrierDamage = Math.min(player.barrier, amount)
+        player.barrier -= barrierDamage
+        player.integrity -= amount - barrierDamage
+        player.lastDamagedAt = now
+
+        if (player.integrity <= 0) {
+            knockOutPlayer(room, player, now, attackerId)
+        }
+    }
+
+    function knockOutPlayer(room, player, now, attackerId) {
+        player.integrity = 0
+        player.barrier = 0
+        player.respawnAt = now + CONFIG.respawnDelayMs
+        player.order = null
+        resetCapturesForPlayer(room, player.playerId)
+
+        const attackerName = attackerId ? getPlayerName(room, attackerId) : 'o combate'
+        addLog(room, player.gamerTag + ' caiu para ' + attackerName + ' e reaparece na base em ' + Math.ceil(CONFIG.respawnDelayMs / 1000) + 's.')
+    }
+
+    function applyDamageToUnit(room, unit, amount, now, attackerId) {
         const barrierDamage = Math.min(unit.barrier, amount)
         unit.barrier -= barrierDamage
         unit.integrity -= amount - barrierDamage
         unit.lastDamagedAt = now
+        syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
 
         if (unit.integrity <= 0) {
+            if (unit.type === 'capturer') {
+                knockOutCaptureUnit(room, unit, now, attackerId)
+                return
+            }
+
             delete room.units[unit.unitId]
         }
+    }
+
+    function knockOutCaptureUnit(room, unit, now, attackerId) {
+        const player = room.players[unit.ownerId]
+        delete room.units[unit.unitId]
+
+        if (!player || !player.alive) {
+            return
+        }
+
+        player.activeCaptureUnitId = null
+        player.integrity = 0
+        player.barrier = 0
+        player.respawnAt = now + CONFIG.respawnDelayMs
+        player.order = null
+        player.avatarDeployed = false
+        resetCapturesForPlayer(room, player.playerId)
+
+        const attackerName = attackerId ? getPlayerName(room, attackerId) : 'o combate'
+        addLog(room, player.gamerTag + ' perdeu o Capturador para ' + attackerName + ' e reaparece na base em ' + Math.ceil(CONFIG.respawnDelayMs / 1000) + 's.')
     }
 
     function applyDamageToStructure(room, structure, amount, now, attackerId) {
@@ -1104,6 +1480,10 @@ export default function createGame() {
         player.alive = false
         player.coal = 0
         player.knowledge = 0
+        player.integrity = 0
+        player.barrier = 0
+        player.respawnAt = null
+        player.order = null
 
         const base = room.structures[player.baseId]
         if (base) {
@@ -1137,13 +1517,15 @@ export default function createGame() {
     function findTowerTarget(room, structure) {
         const range = STRUCTURES[structure.type].attackRange
         const enemies = collectDamageableTargets(room)
-            .filter(candidate => candidate.value.ownerId !== structure.ownerId)
+            .filter(candidate => getDamageableOwnerId(candidate) !== structure.ownerId)
             .filter(candidate => !candidate.value.disabled)
             .filter(candidate => distance(structure, candidate.value) <= range)
 
         enemies.sort((first, second) => {
+            const weights = { unit: 1, player: 2, structure: 3 }
+
             if (first.kind !== second.kind) {
-                return first.kind === 'unit' ? -1 : 1
+                return weights[first.kind] - weights[second.kind]
             }
 
             return distance(structure, first.value) - distance(structure, second.value)
@@ -1159,6 +1541,14 @@ export default function createGame() {
             targets.push({ kind: 'unit', value: room.units[unitId] })
         }
 
+        for (const playerId in room.players) {
+            const player = room.players[playerId]
+
+            if (isPlayerAvailable(player)) {
+                targets.push({ kind: 'player', value: player })
+            }
+        }
+
         for (const structureId in room.structures) {
             const structure = room.structures[structureId]
 
@@ -1170,6 +1560,14 @@ export default function createGame() {
         }
 
         return targets
+    }
+
+    function getDamageableOwnerId(target) {
+        if (target.kind === 'player') {
+            return target.value.playerId
+        }
+
+        return target.value.ownerId
     }
 
     function getNearestEnemyBase(room, ownerId, x, y) {
@@ -1219,10 +1617,13 @@ export default function createGame() {
     }
 
     function getCaptureCandidate(room, structure) {
-        const candidates = Object.values(room.players)
-            .filter(player => player.alive)
-            .filter(player => player.playerId !== structure.ownerId)
-            .filter(player => distance(player, structure) <= CONFIG.captureRange)
+        const candidates = Object.values(room.units)
+            .filter(unit => unit.type === 'capturer')
+            .filter(unit => unit.ownerId !== structure.ownerId)
+            .filter(unit => unit.order && unit.order.type === 'capture')
+            .filter(unit => unit.order.structureId === structure.structureId)
+            .filter(unit => room.players[unit.ownerId] && room.players[unit.ownerId].alive)
+            .filter(unit => distance(unit, structure) <= CONFIG.captureRange)
 
         candidates.sort((first, second) => distance(first, structure) - distance(second, structure))
 
@@ -1237,6 +1638,31 @@ export default function createGame() {
                 structure.capture = null
             }
         }
+    }
+
+    function getPlayerCaptureUnit(room, player) {
+        if (player.activeCaptureUnitId && room.units[player.activeCaptureUnitId]) {
+            return room.units[player.activeCaptureUnitId]
+        }
+
+        return Object.values(room.units)
+            .find(unit => unit.type === 'capturer' && unit.ownerId === player.playerId) || null
+    }
+
+    function syncPlayerToCaptureUnit(player, unit) {
+        if (!player || !unit || unit.type !== 'capturer') {
+            return
+        }
+
+        player.x = unit.x
+        player.y = unit.y
+        player.integrity = Math.max(0, unit.integrity)
+        player.maxIntegrity = unit.maxIntegrity
+        player.barrier = Math.max(0, unit.barrier)
+        player.maxBarrier = unit.maxBarrier
+        player.activeCaptureUnitId = unit.unitId
+        player.lastMovedAt = Date.now()
+        player.lastDamagedAt = unit.lastDamagedAt
     }
 
     function canBuildStructure(room, player, type) {
@@ -1282,7 +1708,7 @@ export default function createGame() {
 
     function getActorAt(room, x, y, ignoredPlayerId = null) {
         const player = Object.values(room.players)
-            .find(candidate => candidate.alive
+            .find(candidate => isPlayerAvailable(candidate)
                 && candidate.playerId !== ignoredPlayerId
                 && candidate.x === x
                 && candidate.y === y)
@@ -1293,6 +1719,50 @@ export default function createGame() {
 
         return Object.values(room.units)
             .find(unit => unit.x === x && unit.y === y) || null
+    }
+
+    function isPlayerCommandable(player) {
+        return Boolean(player && player.alive && !player.respawnAt)
+    }
+
+    function isPlayerAvailable(player) {
+        return Boolean(player && player.alive && player.avatarDeployed !== false && !player.respawnAt && player.integrity > 0)
+    }
+
+    function getRespawnTile(room, player) {
+        const base = room.structures[player.baseId]
+
+        if (!base || base.disabled) {
+            return null
+        }
+
+        return getEmptyNeighbor(room, base.x, base.y) || getEmptyTileNear(room, base.x, base.y, 4)
+    }
+
+    function getEmptyTileNear(room, x, y, maxRadius) {
+        for (let radius = 1; radius <= maxRadius; radius += 1) {
+            for (let dy = -radius; dy <= radius; dy += 1) {
+                for (let dx = -radius; dx <= radius; dx += 1) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) {
+                        continue
+                    }
+
+                    const next = { x: x + dx, y: y + dy }
+
+                    if (!isInsideMap(next.x, next.y)) {
+                        continue
+                    }
+
+                    if (getStructureAt(room, next.x, next.y) || getActorAt(room, next.x, next.y)) {
+                        continue
+                    }
+
+                    return next
+                }
+            }
+        }
+
+        return null
     }
 
     function getEmptyNeighbor(room, x, y) {
@@ -1455,6 +1925,14 @@ function summarizePlayer(player) {
         alive: player.alive,
         connected: player.connected,
         baseId: player.baseId,
+        integrity: player.integrity,
+        maxIntegrity: player.maxIntegrity,
+        barrier: player.barrier,
+        maxBarrier: player.maxBarrier,
+        respawnAt: player.respawnAt,
+        order: player.order,
+        activeCaptureUnitId: player.activeCaptureUnitId,
+        avatarDeployed: player.avatarDeployed,
         unlocked: player.unlocked,
     }
 }

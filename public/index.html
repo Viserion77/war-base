@@ -357,7 +357,7 @@
 
         .resource-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 8px;
         }
 
@@ -541,7 +541,7 @@
                             <strong>Objetivo</strong>
                             <ul class="help-list">
                                 <li>Proteja sua Base. A ultima base ativa vence.</li>
-                                <li>Capture fabricas neutras ou desativadas ficando parado no alcance por 30 segundos.</li>
+                                <li>Capture fabricas neutras ou desativadas selecionando o alvo; Iniciar captura envia um Capturador da Base.</li>
                                 <li>Use Cover para gerar carvao, evolua a Base para nivel 2 e construa Taraque para pesquisar ataques.</li>
                                 <li>Pesquise Per, Hef e Tujai. A Tujai permite enviar Zunim contra a base inimiga mais proxima.</li>
                             </ul>
@@ -549,10 +549,12 @@
                         <div class="help-block">
                             <strong>Comandos</strong>
                             <dl class="command-list">
-                                <div><dt>WASD</dt><dd>Mover o jogador.</dd></div>
-                                <div><dt>Setas</dt><dd>Mover o jogador.</dd></div>
-                                <div><dt>Clique</dt><dd>Selecionar terreno ou construcao.</dd></div>
-                                <div><dt>Botoes</dt><dd>Construir, pesquisar, evoluir e enviar NPC.</dd></div>
+                                <div><dt>W</dt><dd>Upar a construcao selecionada.</dd></div>
+                                <div><dt>A</dt><dd>Construir Cover no terreno selecionado.</dd></div>
+                                <div><dt>S</dt><dd>Enviar Zunim quando Tujai estiver ativa.</dd></div>
+                                <div><dt>D</dt><dd>Iniciar captura do alvo ou focar a Base.</dd></div>
+                                <div><dt>Clique</dt><dd>Selecionar terreno ou construcao capturavel.</dd></div>
+                                <div><dt>Botoes</dt><dd>Construir, pesquisar, evoluir, capturar e enviar NPC.</dd></div>
                                 <div><dt>HostKey</dt><dd>Codigo para outros jogadores entrarem na sala.</dd></div>
                             </dl>
                         </div>
@@ -565,11 +567,9 @@
 
     <script type="module">
         import createGame from './game.js'
-        import createKeyboardListener from './keyboard-listener.js'
         import renderScreen, { getStructureAt, getTileFromCanvasEvent, setupScreen } from './render-screen.js'
 
         const game = createGame()
-        const keyboardListener = createKeyboardListener(document)
         const socket = io()
         const uiState = {
             selectedTile: null,
@@ -577,7 +577,6 @@
         }
 
         let renderStarted = false
-        let keyboardSubscribed = false
         let submitMode = 'create'
 
         const lobby = document.getElementById('lobby')
@@ -595,8 +594,6 @@
 
         socket.on('disconnect', () => {
             connectionStatus.textContent = 'offline'
-            keyboardListener.unsubscribeAll()
-            keyboardSubscribed = false
         })
 
         lobbyForm.addEventListener('click', (event) => {
@@ -656,14 +653,7 @@
             uiState.selectedStructureId = structure ? structure.structureId : null
         })
 
-        document.addEventListener('keydown', (event) => {
-            if (event.key !== 'Escape' || !game.state.hostKey) {
-                return
-            }
-
-            uiState.selectedTile = null
-            uiState.selectedStructureId = null
-        })
+        document.addEventListener('keydown', handleKeyboardShortcut)
 
         hud.addEventListener('pointerdown', (event) => {
             const button = event.target.closest('button[data-action]')
@@ -704,22 +694,118 @@
                     npcType: button.dataset.npc,
                 })
             }
+
+            if (action === 'capture') {
+                socket.emit('game-action', {
+                    action: 'capture',
+                    structureId: button.dataset.structureId,
+                })
+            }
         })
+
+        function handleKeyboardShortcut(event) {
+            if (!game.state.hostKey || isEditableTarget(event.target)) {
+                return
+            }
+
+            if (event.key === 'Escape') {
+                uiState.selectedTile = null
+                uiState.selectedStructureId = null
+                return
+            }
+
+            const key = event.key.toLowerCase()
+
+            if (!['w', 'a', 's', 'd'].includes(key)) {
+                return
+            }
+
+            event.preventDefault()
+
+            if (key === 'w') {
+                upgradeSelectedStructure()
+            }
+
+            if (key === 'a') {
+                buildCoverOnSelectedTile()
+            }
+
+            if (key === 's') {
+                spawnZunim()
+            }
+
+            if (key === 'd') {
+                captureSelectedStructureOrFocusBase()
+            }
+        }
+
+        function isEditableTarget(target) {
+            return target && (target.matches('input, textarea, select') || target.isContentEditable)
+        }
+
+        function upgradeSelectedStructure() {
+            if (!uiState.selectedStructureId) {
+                return
+            }
+
+            socket.emit('game-action', {
+                action: 'upgrade',
+                structureId: uiState.selectedStructureId,
+            })
+        }
+
+        function buildCoverOnSelectedTile() {
+            if (!uiState.selectedTile) {
+                return
+            }
+
+            socket.emit('game-action', {
+                action: 'build',
+                structureType: 'cover',
+                x: uiState.selectedTile.x,
+                y: uiState.selectedTile.y,
+            })
+        }
+
+        function spawnZunim() {
+            socket.emit('game-action', {
+                action: 'spawn-npc',
+                npcType: 'zunim',
+            })
+        }
+
+        function captureSelectedStructureOrFocusBase() {
+            const structure = uiState.selectedStructureId ? game.state.structures[uiState.selectedStructureId] : null
+            const catalog = structure ? game.state.catalog.structures[structure.type] : null
+
+            if (structure && catalog && catalog.captureable) {
+                socket.emit('game-action', {
+                    action: 'capture',
+                    structureId: structure.structureId,
+                })
+                return
+            }
+
+            focusOwnBase()
+        }
+
+        function focusOwnBase() {
+            const player = game.state.players[socket.id]
+            const base = player ? game.state.structures[player.baseId] : null
+
+            if (!base) {
+                return
+            }
+
+            uiState.selectedTile = { x: base.x, y: base.y }
+            uiState.selectedStructureId = base.structureId
+        }
 
         function enterGame() {
             lobby.classList.add('hidden')
             gameView.classList.remove('hidden')
             roomLabel.textContent = `sala ${game.state.hostKey}`
             setupScreen(screen, game)
-
-            keyboardListener.registerPlayerId(socket.id)
-
-            if (!keyboardSubscribed) {
-                keyboardListener.subscribe((command) => {
-                    socket.emit('move-player', command)
-                })
-                keyboardSubscribed = true
-            }
 
             if (!renderStarted) {
                 renderScreen(screen, hud, game, requestAnimationFrame, socket.id, uiState)
