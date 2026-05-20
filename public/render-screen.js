@@ -391,6 +391,7 @@ function updateHud(hud, game, currentPlayerId, uiState) {
 
     const selectedStructure = getSelectedStructure(game.state, uiState)
     const winner = game.state.winnerId ? game.state.players[game.state.winnerId] : null
+    const captureStatus = getCaptureStatus(game, currentPlayerId)
 
     const hudHtml = `
         <section class="panel room-panel">
@@ -401,6 +402,7 @@ function updateHud(hud, game, currentPlayerId, uiState) {
                 <span><b>${formatNumber(currentPlayer.knowledge)}</b><small>Conhecimento</small></span>
                 <span><b>${currentPlayer.alive ? 'Ativa' : 'Fora'}</b><small>Base</small></span>
             </div>
+            ${captureStatusPanel(captureStatus)}
         </section>
         <section class="panel">
             <div class="panel-title">Construcoes</div>
@@ -438,6 +440,48 @@ function updateHud(hud, game, currentPlayerId, uiState) {
     if (hud.__lastHtml !== hudHtml) {
         hud.innerHTML = hudHtml
         hud.__lastHtml = hudHtml
+    }
+}
+
+function captureStatusPanel(captureStatus) {
+    if (!captureStatus) {
+        return ''
+    }
+
+    return `
+        <div class="capture-status">
+            <div class="capture-status-header">
+                <span>Capturando ${escapeHtml(captureStatus.label)}</span>
+                <strong>${captureStatus.percent}%</strong>
+            </div>
+            <div class="capture-meter" aria-hidden="true">
+                <span style="width: ${captureStatus.percent}%"></span>
+            </div>
+            <small>${captureStatus.elapsedSeconds}/${captureStatus.totalSeconds}s - fique parado para concluir.</small>
+        </div>
+    `
+}
+
+function getCaptureStatus(game, playerId) {
+    const captures = Object.values(game.state.structures || {})
+        .filter(structure => structure.capture && structure.capture.playerId === playerId)
+        .sort((first, second) => second.capture.progressMs - first.capture.progressMs)
+
+    if (!captures.length) {
+        return null
+    }
+
+    const structure = captures[0]
+    const catalog = game.state.catalog.structures[structure.type]
+    const totalMs = Math.max(1, game.state.config.captureDurationMs || 1)
+    const progressMs = Math.min(totalMs, structure.capture.progressMs)
+    const percent = Math.min(100, Math.round((progressMs / totalMs) * 100))
+
+    return {
+        label: catalog ? catalog.label : structure.type,
+        percent,
+        elapsedSeconds: Math.ceil(progressMs / 1000),
+        totalSeconds: Math.ceil(totalMs / 1000),
     }
 }
 
