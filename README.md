@@ -129,6 +129,8 @@ Cada tipo construível tem limite atrelado ao nível da Base. O limite usa `base
 
 Estruturas que não são a Base só podem receber upgrade até o nível atual da Base. A Base não tem esse teto e é o eixo para liberar mais slots e níveis.
 
+O upgrade da Base também depende de um gate de progressão: a média de níveis das demais estruturas próprias ativas precisa alcançar `nivelAtualDaBase × 0.75` para que o botão de upgrade libere. Por exemplo, para subir do nível 4 para o 5 a média precisa ser ≥ 3; para subir de 100 para 101, ≥ 75. Estruturas desativadas próprias não entram na conta; capturas entram.
+
 ### Base
 
 - 1000 de integridade inicial.

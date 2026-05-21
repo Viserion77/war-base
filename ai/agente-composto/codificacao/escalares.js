@@ -65,6 +65,8 @@ export function encodeScalars(state, playerId) {
         getSlotRatio(buildLimits, 'hef'),
         getSlotRatio(buildLimits, 'tujai'),
         getCappedTypesFraction(buildLimits),
+        getBaseUpgradeRatio(buildLimits),
+        getBaseUpgradeReady(buildLimits),
     ]
 }
 
@@ -114,6 +116,20 @@ export function getCappedTypesFraction(limits) {
         .length
 
     return ratio(cappedTypes, BUILD_LIMIT_TYPES.length)
+}
+
+export function getBaseUpgradeRatio(limits) {
+    const gate = limits.baseUpgrade
+
+    if (!gate) {
+        return 0
+    }
+
+    return ratio(gate.averageLevel, Math.max(gate.required, 0.0001))
+}
+
+export function getBaseUpgradeReady(limits) {
+    return limits.baseUpgrade?.ready ? 1 : 0
 }
 
 export function getMapDistance(state) {

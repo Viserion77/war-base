@@ -430,6 +430,53 @@
             background: var(--gold);
         }
 
+        .base-gate {
+            display: grid;
+            gap: 6px;
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(120, 120, 120, 0.35);
+            background: rgba(120, 120, 120, 0.10);
+        }
+
+        .base-gate.base-gate-ready {
+            border-color: rgba(67, 170, 139, 0.6);
+            background: rgba(67, 170, 139, 0.14);
+        }
+
+        .base-gate-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 0.84rem;
+            font-weight: 800;
+            color: var(--muted);
+        }
+
+        .base-gate.base-gate-ready .base-gate-header {
+            color: #155c45;
+        }
+
+        .base-gate-meter {
+            height: 6px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: rgba(120, 120, 120, 0.18);
+        }
+
+        .base-gate-meter span {
+            display: block;
+            height: 100%;
+            border-radius: inherit;
+            background: var(--muted);
+        }
+
+        .base-gate.base-gate-ready .base-gate-meter span {
+            background: #43aa8b;
+        }
+
         .resource-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);

@@ -140,6 +140,7 @@ function createAiState() {
                 per: { current: 1, max: 2 },
                 hef: { current: 1, max: 2 },
                 tujai: { current: 1, max: 2 },
+                baseUpgrade: { averageLevel: 1.5, required: 1.5, ratio: 0.75, ready: true },
             },
         },
     }

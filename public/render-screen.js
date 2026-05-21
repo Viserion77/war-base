@@ -509,6 +509,7 @@ function updateHud(hud, game, currentPlayerId, uiState) {
                 <span><b>${formatNumber(getPlayerUnitCount(game.state, currentPlayerId))}</b><small>Unidades</small></span>
             </div>
             ${captureStatusPanel(captureStatus)}
+            ${baseUpgradeGatePanel(game, currentPlayerId)}
         </section>
         <section class="panel">
             <div class="panel-title">Construcoes</div>
@@ -566,6 +567,39 @@ function captureStatusPanel(captureStatus) {
                 <span style="width: ${captureStatus.percent}%"></span>
             </div>
             <small>${captureStatus.elapsedSeconds}/${captureStatus.totalSeconds}s - ordem ativa ate concluir.</small>
+        </div>
+    `
+}
+
+function baseUpgradeGatePanel(game, playerId) {
+    const gate = game.state.catalog.limits?.baseUpgrade
+
+    if (!gate) {
+        return ''
+    }
+
+    const player = game.state.players[playerId]
+    const base = player ? game.state.structures[player.baseId] : null
+
+    if (!base) {
+        return ''
+    }
+
+    const percent = Math.max(0, Math.min(100, Math.round((gate.averageLevel / Math.max(gate.required, 0.0001)) * 100)))
+    const stateClass = gate.ready ? 'base-gate-ready' : 'base-gate-closed'
+    const label = gate.ready
+        ? `Base lvl ${base.level} - pronto para upar`
+        : `Base lvl ${base.level} - media ${gate.averageLevel.toFixed(2)} / ${gate.required.toFixed(2)} (${Math.round(gate.ratio * 100)}%)`
+
+    return `
+        <div class="base-gate ${stateClass}">
+            <div class="base-gate-header">
+                <span>${label}</span>
+                <strong>${percent}%</strong>
+            </div>
+            <div class="base-gate-meter" aria-hidden="true">
+                <span style="width: ${gate.ready ? 100 : percent}%"></span>
+            </div>
         </div>
     `
 }
@@ -766,7 +800,8 @@ function selectedPanel(game, player, selectedStructure, uiState) {
     const ownerName = owner ? owner.gamerTag : 'Neutro'
     const upgradeCost = Math.round(catalog.cost * (1.5 ** selectedStructure.level))
     const base = player ? game.state.structures[player.baseId] : null
-    const upgradeDisabledReason = getUpgradeDisabledReason(player, selectedStructure, upgradeCost, base ? base.level : 0)
+    const baseUpgradeGate = game.state.catalog.limits?.baseUpgrade || null
+    const upgradeDisabledReason = getUpgradeDisabledReason(player, selectedStructure, upgradeCost, base ? base.level : 0, baseUpgradeGate)
     const canUpgrade = !upgradeDisabledReason
     const title = upgradeDisabledReason ? ` title="${escapeHtml(upgradeDisabledReason)}"` : ''
     const captureDisabledReason = getCaptureDisabledReason(game, player, selectedStructure)
@@ -804,7 +839,7 @@ function selectedPanel(game, player, selectedStructure, uiState) {
     `
 }
 
-function getUpgradeDisabledReason(player, structure, cost, baseLevel = 0) {
+function getUpgradeDisabledReason(player, structure, cost, baseLevel = 0, baseUpgradeGate = null) {
     if (structure.ownerId !== player.playerId) {
         return 'Selecione uma construcao sua para upgrade.'
     }
@@ -819,6 +854,10 @@ function getUpgradeDisabledReason(player, structure, cost, baseLevel = 0) {
 
     if (structure.type !== 'base' && structure.level >= baseLevel) {
         return 'Bloqueado: nivel da estrutura ja igual ao nivel da Base.'
+    }
+
+    if (structure.type === 'base' && baseUpgradeGate && !baseUpgradeGate.ready) {
+        return `Base bloqueada: media ${baseUpgradeGate.averageLevel.toFixed(2)} < ${baseUpgradeGate.required.toFixed(2)} (${Math.round(baseUpgradeGate.ratio * 100)}% do nivel atual).`
     }
 
     if (player.coal < cost) {
@@ -1255,6 +1294,7 @@ function escapeHtml(value) {
 
 export const __renderTestables = {
     captureStatusPanel,
+    baseUpgradeGatePanel,
     getCaptureStatus,
     drawFogOverlay,
     hasRememberedStructureAt,

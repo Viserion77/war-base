@@ -33,6 +33,8 @@ export const SCALAR_INPUTS = [
     'hefSlotRatio',
     'tujaiSlotRatio',
     'cappedTypesFraction',
+    'averageStructureLevelRatio',
+    'baseUpgradeReady',
 ]
 export const SCALAR_INPUT_SIZE = SCALAR_INPUTS.length
 export const COMPOSITE_INPUT_SIZE = BOARD_HISTORY_FRAMES * BOARD_SIZE + SCALAR_INPUT_SIZE

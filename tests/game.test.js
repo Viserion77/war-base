@@ -199,7 +199,12 @@ describe('createGame', () => {
     test('upgrades the base and unlocks taraque', () => {
         const game = createGame()
         const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const room = game.__testing.getRoom(match.hostKey)
+        const player = room.players['player-1']
         const base = getStructure(match.state, structure => structure.type === 'base' && structure.ownerId === 'player-1')
+
+        createOwnedStructures(game, room, player, 'cover', 1)
+        player.coal = 750
 
         game.executeAction({
             playerId: 'player-1',

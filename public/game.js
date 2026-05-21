@@ -20,6 +20,7 @@ const CONFIG = {
     shieldRegenPerSecond: 8,
     maxPlayersPerRoom: 8,
     logLimit: 12,
+    baseUpgradeAverageRatio: 0.75,
 }
 
 const STRUCTURES = {
@@ -1184,6 +1185,22 @@ export default function createGame(options = {}) {
                     structure: summarizeStructure(structure),
                     baseLevel,
                     reason: 'limite de nivel da base',
+                })
+                return false
+            }
+        }
+
+        if (structure.type === 'base') {
+            const gate = computeBaseUpgradeGate(room, player.playerId, structure.level)
+
+            if (!gate.ready) {
+                addLog(room, `${player.gamerTag}: Base bloqueada - media de estruturas ${gate.averageLevel.toFixed(2)} < ${gate.required.toFixed(2)} (${Math.round(gate.ratio * 100)}% do nivel atual).`)
+                debugLog(room, 'upgrade:denied', {
+                    player: summarizePlayer(player),
+                    structure: summarizeStructure(structure),
+                    averageLevel: gate.averageLevel,
+                    required: gate.required,
+                    reason: 'gate de upgrade da base',
                 })
                 return false
             }
@@ -2443,7 +2460,34 @@ export default function createGame(options = {}) {
             }
         }
 
+        limits.baseUpgrade = computeBaseUpgradeGate(room, playerId, base ? base.level : 0)
         return limits
+    }
+
+    function computeAverageStructureLevel(room, playerId) {
+        const owned = Object.values(room.structures)
+            .filter(structure => structure.ownerId === playerId)
+            .filter(structure => structure.type !== 'base')
+            .filter(structure => !structure.disabled)
+
+        if (owned.length === 0) {
+            return 0
+        }
+
+        const sum = owned.reduce((total, structure) => total + structure.level, 0)
+        return sum / owned.length
+    }
+
+    function computeBaseUpgradeGate(room, playerId, baseLevel) {
+        const averageLevel = computeAverageStructureLevel(room, playerId)
+        const required = baseLevel * CONFIG.baseUpgradeAverageRatio
+
+        return {
+            averageLevel,
+            required,
+            ratio: CONFIG.baseUpgradeAverageRatio,
+            ready: averageLevel >= required,
+        }
     }
 
     function isNearOwnedAnchor(room, playerId, x, y) {
@@ -2716,6 +2760,8 @@ export default function createGame(options = {}) {
             getBuildLimit,
             countActiveOwnedStructures,
             computePlayerLimits,
+            computeAverageStructureLevel,
+            computeBaseUpgradeGate,
             getEmptyTileNear,
             getEmptyNeighbor,
             summarizeActor,

@@ -2,6 +2,6 @@
 import { exemploHeatmap } from './dataset-utils.js'
 
 export const datasetUpgrade = [
-    exemploHeatmap(4, 4, { coal: 1, baseLevel: 0.5, cappedTypesFraction: 0.4 }),
-    exemploHeatmap(6, 4, { coal: 0.7, perCount: 0.2, baseLevel: 0.75, perSlotRatio: 0.5 }),
+    exemploHeatmap(4, 4, { coal: 1, baseLevel: 0.5, cappedTypesFraction: 0.4, baseUpgradeReady: 1 }),
+    exemploHeatmap(6, 4, { coal: 0.7, perCount: 0.2, baseLevel: 0.75, perSlotRatio: 0.5, baseUpgradeReady: 0, averageStructureLevelRatio: 0.6 }),
 ]

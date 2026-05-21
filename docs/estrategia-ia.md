@@ -9,7 +9,7 @@ A IA e um jogador interno adicionado pelo servidor. A cada ciclo de decisao, ela
 O fluxo principal e:
 
 1. O servidor adiciona um jogador interno controlado por IA.
-2. O agente composto monta o input com 3 frames do tabuleiro espectral e 30 escalares.
+2. O agente composto monta o input com 3 frames do tabuleiro espectral e 32 escalares.
 3. A rede `router` escolhe a macro-acao: `farm`, `capture`, `research`, `defend`, `attack`, `upgrade`, `upgrade-base`, `scout` ou `wait`.
 4. A sub-rede da macro-acao decide o detalhe: alvo, tile de construcao, pesquisa ou spawn.
 5. Os validadores deterministicos conferem recursos, requisitos, alcance e ocupacao do mapa.
@@ -28,9 +28,9 @@ Isso faz a IA decidir com a mesma informacao espacial que um humano teria: alvos
 Cada decisao usa:
 
 - 3 frames do tabuleiro 48x30, codificados como valores espectrais em um vetor achatado;
-- 30 escalares de economia, tecnologia, composicao, alvos visiveis, memoria, inimigos vivos, fracao visivel do mapa, tick da partida e ocupacao dos slots de construcao.
+- 32 escalares de economia, tecnologia, composicao, alvos visiveis, memoria, inimigos vivos, fracao visivel do mapa, tick da partida, ocupacao dos slots de construcao e gate percentual de upgrade da Base.
 
-O tamanho final do input padrao e `4350` floats. A rede compartilhada de placement recebe mais 6 valores one-hot para o tipo de estrutura, totalizando `4356` floats.
+O tamanho final do input padrao e `4352` floats. A rede compartilhada de placement recebe mais 6 valores one-hot para o tipo de estrutura, totalizando `4358` floats.
 
 ## Redes
 
@@ -56,7 +56,7 @@ A camada em `ai/agente-composto/validadores.js` continua essencial. Ela impede c
 
 - construcoes precisam de carvao, requisitos liberados, tile livre, alcance de construcao e slot disponivel em `catalog.limits`;
 - pesquisas precisam de conhecimento e nivel minimo de Taraque;
-- upgrades so podem mirar estruturas proprias ativas com carvao suficiente; estruturas nao-base tambem precisam estar abaixo do nivel da Base;
+- upgrades so podem mirar estruturas proprias ativas com carvao suficiente; estruturas nao-base tambem precisam estar abaixo do nivel da Base; o upgrade da Base depende da media de niveis das outras estruturas alcancar `nivelAtual * 0.75`;
 - capturas so miram estruturas capturaveis visiveis ou lembradas;
 - scout usa `move-capturer-to` para explorar tiles sob fog.
 

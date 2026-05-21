@@ -286,9 +286,17 @@ export function decidirHeuristicamente(state, playerId) {
         'spawn-zunim',
         'scout',
     ]
-    const actions = countCappedTypes(state) >= 2
-        ? ['upgrade-base', ...standardActions.filter(action => action !== 'upgrade-base')]
-        : standardActions
+    const gate = state.catalog?.limits?.baseUpgrade
+    const gateClosed = gate ? !gate.ready : false
+    const capsCheios = countCappedTypes(state) >= 2
+
+    let actions = standardActions
+
+    if (gateClosed) {
+        actions = ['upgrade', ...standardActions.filter(action => action !== 'upgrade-base')]
+    } else if (capsCheios) {
+        actions = ['upgrade-base', ...standardActions.filter(action => action !== 'upgrade-base')]
+    }
 
     for (const action of actions) {
         const comando = criarComandoParaAcao(action, state, playerId)

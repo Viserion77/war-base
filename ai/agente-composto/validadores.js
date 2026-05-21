@@ -110,6 +110,12 @@ export function criarComandoUpgrade(state, playerId, heatmap = null, allowedType
         return null
     }
 
+    const isBaseOnly = Array.isArray(allowedTypes) && allowedTypes.length === 1 && allowedTypes[0] === 'base'
+
+    if (isBaseOnly && !state.catalog?.limits?.baseUpgrade?.ready) {
+        return null
+    }
+
     const targets = getUpgradeableTargets(state, playerId)
         .filter(structure => !allowedTypes || allowedTypes.includes(structure.type))
         .filter(structure => player.coal >= getUpgradeCost(state, structure))
@@ -118,7 +124,12 @@ export function criarComandoUpgrade(state, playerId, heatmap = null, allowedType
         return null
     }
 
-    const context = { cappedTypes: countCappedTypes(state) }
+    const gate = state.catalog?.limits?.baseUpgrade
+    const context = {
+        cappedTypes: countCappedTypes(state),
+        gateClosed: gate ? !gate.ready : false,
+        averageLevel: gate ? gate.averageLevel : 0,
+    }
 
     targets.sort((first, second) => getHeatmapScore(heatmap, second) - getHeatmapScore(heatmap, first)
         || getUpgradePriority(first, context) - getUpgradePriority(second, context)
@@ -328,6 +339,10 @@ export function getOwnBase(state, playerId) {
 export function getUpgradePriority(structure, context = {}) {
     if (structure.type === 'base' && context.cappedTypes > 0) {
         return -1
+    }
+
+    if (context.gateClosed && structure.type !== 'base' && structure.level < (context.averageLevel ?? 0)) {
+        return -2
     }
 
     const priorities = { base: 0, per: 1, hef: 2, cover: 3, taraque: 4, tujai: 5 }
