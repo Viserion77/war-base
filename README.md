@@ -45,6 +45,8 @@ O endpoint `GET /health` retorna `status`, `activeRooms`, `uptimeSeconds` e `tim
 
 O jogo agora pode adicionar uma IA neural pela lista de jogadores no HUD, usando o botão **Adicionar IA**. O servidor cria um jogador interno, carrega a rede treinada salva em `ai/agente-war-base/rede-treinada.json` e, a cada tick, o agente avalia o estado público da sala para emitir ações como capturar, construir, pesquisar, fazer upgrades e enviar Zunim.
 
+A estratégia adotada está documentada em [docs/estrategia-ia.md](docs/estrategia-ia.md).
+
 A implementação fica separada em duas partes:
 
 - `ai/rede-neural/`: matriz e rede neural feedforward com backpropagation, inspirada no exemplo `redeNeural.js`.
