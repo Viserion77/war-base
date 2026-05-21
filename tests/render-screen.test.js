@@ -167,10 +167,14 @@ describe('render-screen', () => {
         expect(minimalCanvas.width).toBe(50)
     })
 
-    test('finds structures by tile', () => {
-        const state = { structures: { a: { x: 1, y: 2 }, b: { x: 3, y: 4 } } }
+    test('finds structures by tile, including remembered structures', () => {
+        const state = {
+            structures: { a: { x: 1, y: 2 }, b: { x: 3, y: 4 } },
+            memory: { structures: { remembered: { structureId: 'remembered', type: 'cover', x: 6, y: 6 } } },
+        }
 
         expect(getStructureAt(state, 3, 4)).toBe(state.structures.b)
+        expect(getStructureAt(state, 6, 6)).toMatchObject({ remembered: true, structureId: 'remembered' })
         expect(getStructureAt(state, 0, 0)).toBeNull()
     })
 
@@ -200,6 +204,42 @@ describe('render-screen', () => {
         expect(hud.innerHTML).toContain('Estruturas')
         expect(hud.innerHTML).toContain('Unidades')
     })
+
+    test('renders fog overlays and remembered structures', () => {
+        const context = createContext()
+        const canvas = createCanvas(context)
+        const hud = { innerHTML: '', __lastHtml: null }
+        const game = createGameState()
+        game.state.fogMask = Array.from({ length: game.state.screen.height }, () => Array.from({ length: game.state.screen.width }, () => true))
+        game.state.fogMask[2][2] = false
+        game.state.fogMask[3][3] = false
+        game.state.fogMask[4][4] = false
+        game.state.memory = {
+            structures: {
+                'remembered-cover': { structureId: 'remembered-cover', ownerId: 'p2', type: 'cover', x: 4, y: 4, level: 1, disabled: false, seenAt: 1 },
+                'remembered-per': { structureId: 'remembered-per', ownerId: 'p2', type: 'per', x: 3, y: 3, level: 1, disabled: false, seenAt: 1 },
+            },
+        }
+
+        renderScreen(canvas, hud, game, jest.fn(), 'p1', {
+            selectedTile: { x: 4, y: 4 },
+            selectedStructureId: 'remembered-cover',
+        })
+
+        expect(__renderTestables.hasRememberedStructureAt(game.state, 4, 4)).toBe(true)
+        expect(__renderTestables.hasRememberedStructureAt({ structures: { 'remembered-cover': { x: 4, y: 4 } }, memory: game.state.memory }, 4, 4)).toBe(false)
+        expect(__renderTestables.hasRememberedStructureAt({ structures: {}, memory: null }, 4, 4)).toBe(false)
+        expect(__renderTestables.isTileVisible(game.state.fogMask, 3, 3)).toBe(false)
+        expect(__renderTestables.isTileVisible(null, 3, 3)).toBe(true)
+        expect(__renderTestables.getRememberedStructureColor('#ef476f')).toMatch(/^#[0-9a-f]{6}$/)
+        expect(__renderTestables.getRememberedStructureColor('bad')).toBe('#77736a')
+        expect(__renderTestables.getRememberedStructureColor()).toBe('#77736a')
+        expect(__renderTestables.getSelectedStructure(game.state, { selectedStructureId: 'remembered-cover' })).toMatchObject({ remembered: true })
+        expect(__renderTestables.selectedPanel(game, game.state.players.p1, { ...game.state.memory.structures['remembered-cover'], remembered: true }, { selectedTile: { x: 4, y: 4 } })).toContain('Ultimo avistamento')
+        expect(context.__calls.some(call => call[0] === 'set:fillStyle' && call[1] === 'rgba(22, 25, 28, 0.55)')).toBe(true)
+        expect(context.__calls.some(call => call[0] === 'set:fillStyle' && call[1] === 'rgba(47, 51, 55, 0.30)')).toBe(true)
+    })
+
 
     test('renders build placement states and clears hud when no player is active', () => {
         const context = createContext()

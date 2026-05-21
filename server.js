@@ -5,7 +5,7 @@ import express from 'express'
 import http from 'http'
 import { Server } from 'socket.io'
 import createGame from './public/game.js'
-import { createNeuralWarBaseAgent } from './ai/agente-war-base/agente-neural.js'
+import { createCompositeWarBaseAgent } from './ai/agente-composto/agente-composto.js'
 
 export const DEFAULT_PORT = process.env.PORT || 4000
 
@@ -16,7 +16,7 @@ export function createWarBaseServer(options = {}) {
     const shutdownTimeoutMs = options.shutdownTimeoutMs || 5000
     const logsDirectory = options.logsDirectory || path.join(process.cwd(), 'logs', 'rooms')
     const game = options.game || createGame({
-        aiAgent: options.aiAgent || createNeuralWarBaseAgent(options.aiOptions),
+        aiAgent: options.aiAgent || createCompositeWarBaseAgent(options.aiOptions),
     })
     const createSockets = options.createSockets || (httpServer => new Server(httpServer))
     const app = express()
@@ -109,17 +109,25 @@ export function createWarBaseServer(options = {}) {
 }
 
 export function emitGameCommand(command, sockets, appendRoomLog) {
+    if (command.playerId) {
+        if (command.hostKey) {
+            appendRoomLog(command.hostKey, 'socket:emit', {
+                type: command.type,
+                reason: command.reason,
+                playerId: command.playerId,
+            })
+        }
+
+        sockets.to(command.playerId).emit(command.type, command)
+        return
+    }
+
     if (command.hostKey) {
         appendRoomLog(command.hostKey, 'socket:emit', {
             type: command.type,
             reason: command.reason,
         })
         sockets.to(command.hostKey).emit(command.type, command)
-        return
-    }
-
-    if (command.playerId) {
-        sockets.to(command.playerId).emit(command.type, command)
     }
 }
 

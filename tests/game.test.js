@@ -282,7 +282,7 @@ describe('createGame', () => {
         try {
             const game = createGame()
             const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
-            const neutralCover = getStructure(match.state, structure => structure.type === 'cover' && structure.ownerId === null)
+            const neutralCover = getStructure(game.getPublicState(match.hostKey), structure => structure.type === 'cover' && structure.ownerId === null)
 
             game.executeAction({
                 playerId: 'player-1',
@@ -896,6 +896,17 @@ describe('createGame', () => {
         const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice', connected: false })
         const result = game.addAiPlayer({ hostKey: match.hostKey, gamerTag: 'Bot Neural', requestedBy: 'player-1' })
         const room = game.__testing.getRoom(match.hostKey)
+        const aiPlayer = room.players[result.playerId]
+        const aiBase = room.structures[aiPlayer.baseId]
+        const visibleCover = game.__testing.createStructure(room, {
+            ownerId: null,
+            type: 'cover',
+            x: aiBase.x - 2,
+            y: aiBase.y,
+            disabled: true,
+        })
+        visibleCover.integrity = 0
+        visibleCover.barrier = 0
 
         expect(result.error).toBeUndefined()
         expect(result.playerId).toBe('ai-' + match.hostKey + '-1')
@@ -970,9 +981,20 @@ describe('createGame', () => {
         }
         const mixedGame = createGame({ aiAgent: mixedAgent })
         const mixedMatch = mixedGame.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const mixedAi = mixedGame.addAiPlayer({ hostKey: mixedMatch.hostKey })
         mixedGame.addAiPlayer({ hostKey: mixedMatch.hostKey })
-        mixedGame.addAiPlayer({ hostKey: mixedMatch.hostKey })
-        expect(mixedGame.__testing.runAiPlayers(mixedGame.__testing.getRoom(mixedMatch.hostKey), 10000)).toBe(true)
+        const mixedRoom = mixedGame.__testing.getRoom(mixedMatch.hostKey)
+        const mixedAiBase = mixedRoom.structures[mixedRoom.players[mixedAi.playerId].baseId]
+        const mixedVisibleCover = mixedGame.__testing.createStructure(mixedRoom, {
+            ownerId: null,
+            type: 'cover',
+            x: mixedAiBase.x - 2,
+            y: mixedAiBase.y,
+            disabled: true,
+        })
+        mixedVisibleCover.integrity = 0
+        mixedVisibleCover.barrier = 0
+        expect(mixedGame.__testing.runAiPlayers(mixedRoom, 10000)).toBe(true)
 
         const throwingGame = createGame({ aiAgent: { cooldownMs: 0, decide: jest.fn(() => { throw new Error('boom') }) } })
         const debugEntries = []
@@ -984,6 +1006,85 @@ describe('createGame', () => {
         expect(debugEntries).toEqual(expect.arrayContaining([
             expect.objectContaining({ event: 'ai:error' }),
         ]))
+    })
+
+
+    test('computes per-player fog, memory, and scout movement orders', () => {
+        const game = createGame()
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        game.joinMatch({ playerId: 'player-2', gamerTag: 'Bob', hostKey: match.hostKey })
+        const room = game.__testing.getRoom(match.hostKey)
+        const hooks = game.__testing
+        const playerOne = room.players['player-1']
+        const baseOne = room.structures[playerOne.baseId]
+
+        expect(hooks.computeVisibilityMask(room, 'missing').flat().some(Boolean)).toBe(false)
+        const originalBaseId = playerOne.baseId
+        playerOne.baseId = 'missing-base'
+        expect(hooks.computeVisibilityMask(room, 'player-1').flat().some(Boolean)).toBe(true)
+        playerOne.baseId = originalBaseId
+        baseOne.disabled = true
+        expect(hooks.computeVisibilityMask(room, 'player-1')[baseOne.y][baseOne.x]).toBe(true)
+        const originalBasePosition = { x: baseOne.x, y: baseOne.y }
+        baseOne.x = -1
+        baseOne.y = -1
+        hooks.computeVisibilityMask(room, 'player-1')
+        Object.assign(baseOne, originalBasePosition)
+        baseOne.disabled = false
+        room.structures.manualSight = { structureId: 'manualSight', ownerId: 'player-1', type: 'unknown', x: 0, y: 0, disabled: false }
+        expect(hooks.computeVisibilityMask(room, 'player-1')[0][0]).toBe(true)
+        delete room.structures.manualSight
+        expect(hooks.getStructureSightRange('per')).toBe(20)
+        expect(hooks.getStructureSightRange('missing')).toBe(0)
+        expect(hooks.getNpcSightRange('zunim')).toBe(3)
+        expect(hooks.getNpcSightRange('missing')).toBe(0)
+
+        const visibleEnemy = hooks.createStructure(room, { ownerId: 'player-2', type: 'cover', x: baseOne.x + 2, y: baseOne.y })
+        const filtered = game.getPublicState(match.hostKey, 'player-1')
+        expect(filtered.structures[visibleEnemy.structureId]).toBeDefined()
+        expect(filtered.memory.structures[visibleEnemy.structureId]).toMatchObject({ x: visibleEnemy.x, y: visibleEnemy.y })
+        expect(filtered.players['player-2']).toHaveProperty('gamerTag', 'Bob')
+
+        const farEnemyBase = Object.values(room.structures).find(structure => structure.type === 'base' && structure.ownerId === 'player-2')
+        expect(filtered.structures[farEnemyBase.structureId]).toBeUndefined()
+        expect(filtered.players['player-2']).toHaveProperty('coal')
+
+        delete playerOne.memory
+        expect(hooks.refreshPlayerMemory(room, 'player-1', hooks.computeVisibilityMask(room, 'player-1')).structures).toBeDefined()
+        playerOne.memory = {}
+        expect(hooks.refreshPlayerMemory(room, 'player-1', hooks.computeVisibilityMask(room, 'player-1')).structures).toBeDefined()
+        playerOne.memory = { structures: { sparse: { structureId: 'sparse', ownerId: 'player-2', type: 'cover', x: 0, y: 0, level: 1, disabled: false } } }
+        hooks.refreshPlayerMemory(room, 'player-1', [undefined])
+        expect(hooks.refreshPlayerMemory(room, 'missing', hooks.computeVisibilityMask(room, 'missing'))).toEqual({ structures: {} })
+
+        delete room.structures[visibleEnemy.structureId]
+        hooks.refreshPlayerMemory(room, 'player-1', hooks.computeVisibilityMask(room, 'player-1'))
+        expect(playerOne.memory.structures[visibleEnemy.structureId]).toBeUndefined()
+
+        playerOne.respawnAt = Date.now() + 1000
+        expect(hooks.moveCaptureUnitTo(room, playerOne, { x: baseOne.x + 1, y: baseOne.y })).toBe(false)
+        playerOne.respawnAt = null
+        expect(hooks.moveCaptureUnitTo(room, playerOne, { x: -1, y: baseOne.y })).toBe(false)
+        baseOne.disabled = true
+        playerOne.activeCaptureUnitId = null
+        expect(hooks.moveCaptureUnitTo(room, playerOne, { x: baseOne.x + 1, y: baseOne.y })).toBe(false)
+        baseOne.disabled = false
+
+        expect(game.executeAction({
+            playerId: 'player-1',
+            hostKey: match.hostKey,
+            action: 'move-capturer-to',
+            x: baseOne.x + 3,
+            y: baseOne.y,
+        })).toBe(true)
+
+        const capturer = room.units[playerOne.activeCaptureUnitId]
+        capturer.order = { type: 'move', x: -1, y: -1 }
+        expect(hooks.processCaptureUnitOrder(room, capturer, Date.now())).toBe(true)
+        capturer.order = { type: 'move', x: capturer.x, y: capturer.y }
+        expect(hooks.processCaptureUnitOrder(room, capturer, Date.now())).toBe(true)
+        capturer.order = { type: 'move', x: capturer.x + 1, y: capturer.y }
+        expect(hooks.processCaptureUnitOrder(room, capturer, Date.now())).toBe(true)
     })
 
 

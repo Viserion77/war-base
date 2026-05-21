@@ -123,15 +123,19 @@ describe('server infrastructure', () => {
         const appendRoomLog = jest.fn()
         const roomCommand = { type: 'state-update', hostKey: 'ABCDE', reason: 'tick' }
         const playerCommand = { type: 'setup', playerId: 'socket-1' }
+        const targetedStateCommand = { type: 'state-update', hostKey: 'ABCDE', playerId: 'socket-1', reason: 'fog' }
 
         emitGameCommand(roomCommand, sockets, appendRoomLog)
         emitGameCommand(playerCommand, sockets, appendRoomLog)
+        emitGameCommand(targetedStateCommand, sockets, appendRoomLog)
         emitGameCommand({ type: 'noop' }, sockets, appendRoomLog)
 
         expect(appendRoomLog).toHaveBeenCalledWith('ABCDE', 'socket:emit', { type: 'state-update', reason: 'tick' })
+        expect(appendRoomLog).toHaveBeenCalledWith('ABCDE', 'socket:emit', { type: 'state-update', reason: 'fog', playerId: 'socket-1' })
         expect(sockets.emitted).toEqual([
             { room: 'ABCDE', type: 'state-update', command: roomCommand },
             { room: 'socket-1', type: 'setup', command: playerCommand },
+            { room: 'socket-1', type: 'state-update', command: targetedStateCommand },
         ])
     })
 

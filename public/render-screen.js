@@ -27,7 +27,16 @@ export function getTileFromCanvasEvent(event, canvas, game) {
 }
 
 export function getStructureAt(state, x, y) {
-    return Object.values(state.structures || {}).find(structure => structure.x === x && structure.y === y) || null
+    const visibleStructure = Object.values(state.structures || {}).find(structure => structure.x === x && structure.y === y)
+
+    if (visibleStructure) {
+        return visibleStructure
+    }
+
+    const rememberedStructure = Object.values(state.memory?.structures || {})
+        .find(structure => structure.x === x && structure.y === y)
+
+    return rememberedStructure ? { ...rememberedStructure, remembered: true } : null
 }
 
 export default function renderScreen(screen, hud, game, requestAnimationFrame, currentPlayerId, uiState) {
@@ -39,9 +48,11 @@ export default function renderScreen(screen, hud, game, requestAnimationFrame, c
     drawBuildRanges(context, game, uiState, currentPlayerId)
     drawSelection(context, game, uiState, currentPlayerId)
     drawRanges(context, game, uiState)
+    drawRememberedStructures(context, game)
     drawStructures(context, game)
     drawUnits(context, game)
     drawPlayers(context, game, currentPlayerId)
+    drawFogOverlay(context, game)
     updateHud(hud, game, currentPlayerId, uiState)
 
     requestAnimationFrame(() => {
@@ -176,6 +187,17 @@ function drawRanges(context, game, uiState) {
     context.restore()
 }
 
+function drawRememberedStructures(context, game) {
+    const remembered = Object.values(game.state.memory?.structures || {})
+        .filter(structure => !game.state.structures?.[structure.structureId])
+        .filter(structure => !isTileVisible(game.state.fogMask, structure.x, structure.y))
+        .sort((first, second) => getStructureWeight(first.type) - getStructureWeight(second.type))
+
+    for (const structure of remembered) {
+        drawStructure(context, game, { ...structure, remembered: true }, true)
+    }
+}
+
 function drawStructures(context, game) {
     const structures = Object.values(game.state.structures || {})
         .sort((first, second) => getStructureWeight(first.type) - getStructureWeight(second.type))
@@ -185,17 +207,17 @@ function drawStructures(context, game) {
     }
 }
 
-function drawStructure(context, game, structure) {
+function drawStructure(context, game, structure, remembered = false) {
     const { pixelsPerFields } = game.state.screen
     const x = structure.x * pixelsPerFields
     const y = structure.y * pixelsPerFields
     const owner = game.state.players[structure.ownerId]
-    const color = structure.disabled ? '#8c8c8c' : owner ? owner.color : '#9b8a70'
+    const color = remembered ? getRememberedStructureColor(owner?.color) : structure.disabled ? '#8c8c8c' : owner ? owner.color : '#9b8a70'
     const padding = Math.max(2, pixelsPerFields * 0.12)
     const size = pixelsPerFields - padding * 2
 
     context.save()
-    context.globalAlpha = structure.disabled ? 0.68 : 1
+    context.globalAlpha = remembered ? 0.5 : structure.disabled ? 0.68 : 1
     context.lineWidth = 1.5
     context.strokeStyle = '#25221f'
     context.fillStyle = color
@@ -214,7 +236,7 @@ function drawStructure(context, game, structure) {
         drawTujai(context, x + padding, y + padding, size, color)
     }
 
-    if (structure.disabled) {
+    if (!remembered && structure.disabled) {
         context.strokeStyle = '#2f2a25'
         context.beginPath()
         context.moveTo(x + 4, y + 4)
@@ -224,8 +246,11 @@ function drawStructure(context, game, structure) {
         context.stroke()
     }
 
-    drawBars(context, x, y, pixelsPerFields, structure)
-    drawCaptureProgress(context, game, structure, x, y)
+    if (!remembered) {
+        drawBars(context, x, y, pixelsPerFields, structure)
+        drawCaptureProgress(context, game, structure, x, y)
+    }
+
     context.restore()
 }
 
@@ -366,6 +391,60 @@ function drawUnits(context, game) {
         drawBars(context, unit.x * pixelsPerFields, unit.y * pixelsPerFields, pixelsPerFields, unit)
         context.restore()
     }
+}
+
+function drawFogOverlay(context, game) {
+    const fogMask = game.state.fogMask
+
+    if (!Array.isArray(fogMask)) {
+        return
+    }
+
+    const { screen: { width, height, pixelsPerFields } } = game.state
+
+    context.save()
+
+    for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+            if (isTileVisible(fogMask, x, y)) {
+                continue
+            }
+
+            context.fillStyle = hasRememberedStructureAt(game.state, x, y)
+                ? 'rgba(47, 51, 55, 0.30)'
+                : 'rgba(22, 25, 28, 0.55)'
+            context.fillRect(x * pixelsPerFields, y * pixelsPerFields, pixelsPerFields, pixelsPerFields)
+        }
+    }
+
+    context.restore()
+}
+
+function hasRememberedStructureAt(state, x, y) {
+    return Object.values(state.memory?.structures || {})
+        .some(structure => structure.x === x && structure.y === y && !state.structures?.[structure.structureId])
+}
+
+function isTileVisible(fogMask, x, y) {
+    if (!Array.isArray(fogMask)) {
+        return true
+    }
+
+    return Boolean(fogMask[y] && fogMask[y][x])
+}
+
+function getRememberedStructureColor(color) {
+    if (!/^#[0-9a-f]{6}$/i.test(color || '')) {
+        return '#77736a'
+    }
+
+    const red = parseInt(color.slice(1, 3), 16)
+    const green = parseInt(color.slice(3, 5), 16)
+    const blue = parseInt(color.slice(5, 7), 16)
+    const gray = Math.round((red + green + blue) / 3)
+    const mix = value => Math.round(gray * 0.55 + value * 0.45).toString(16).padStart(2, '0')
+
+    return '#' + mix(red) + mix(green) + mix(blue)
 }
 
 function drawPlayers(context, game, currentPlayerId) {
@@ -655,6 +734,18 @@ function selectedPanel(game, player, selectedStructure, uiState) {
         ? '<span class="tile-status tile-status-available">Ordem de captura ativa</span>'
         : ''
 
+    if (selectedStructure.remembered) {
+        return `
+            <div class="selected-card remembered-card">
+                <strong>${catalog.label} N${selectedStructure.level}</strong>
+                <span>${escapeHtml(ownerName)}</span>
+                <span class="tile-status tile-status-blocked">Ultimo avistamento</span>
+                ${orderStatus}
+                ${captureButton}
+            </div>
+        `
+    }
+
     return `
         <div class="selected-card">
             <strong>${catalog.label} N${selectedStructure.level}</strong>
@@ -890,6 +981,10 @@ function getSelectedStructure(state, uiState) {
         return state.structures[uiState.selectedStructureId]
     }
 
+    if (uiState.selectedStructureId && state.memory?.structures?.[uiState.selectedStructureId]) {
+        return { ...state.memory.structures[uiState.selectedStructureId], remembered: true }
+    }
+
     if (!uiState.selectedTile) {
         return null
     }
@@ -1044,6 +1139,10 @@ function escapeHtml(value) {
 export const __renderTestables = {
     captureStatusPanel,
     getCaptureStatus,
+    drawFogOverlay,
+    hasRememberedStructureAt,
+    isTileVisible,
+    getRememberedStructureColor,
     buildButton,
     researchButton,
     getResearchDisabledReason,

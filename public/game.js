@@ -28,6 +28,7 @@ const STRUCTURES = {
         cost: 500,
         integrity: 1000,
         barrier: 500,
+        sightRange: 8,
         integrityPerLevel: 25,
         barrierPerLevel: 25,
         captureable: false,
@@ -38,6 +39,7 @@ const STRUCTURES = {
         cost: 540,
         integrity: 300,
         barrier: 100,
+        sightRange: 4,
         coalRate: 20,
         coalRatePerLevel: 5,
         captureable: true,
@@ -48,6 +50,7 @@ const STRUCTURES = {
         cost: 320,
         integrity: 350,
         barrier: 150,
+        sightRange: 4,
         knowledgeRate: 2,
         knowledgeRatePerLevel: 1,
         captureable: true,
@@ -61,6 +64,7 @@ const STRUCTURES = {
         barrier: 0,
         damage: 5,
         attackRange: 20,
+        sightRange: 20,
         attackEveryMs: 1000,
         captureable: true,
         buildable: true,
@@ -74,6 +78,7 @@ const STRUCTURES = {
         damage: 15,
         splashRadius: 2,
         attackRange: 10,
+        sightRange: 10,
         attackEveryMs: 1000,
         captureable: true,
         buildable: true,
@@ -84,6 +89,7 @@ const STRUCTURES = {
         cost: 600,
         integrity: 200,
         barrier: 0,
+        sightRange: 4,
         captureable: true,
         buildable: true,
         requiresResearch: 'tujai',
@@ -116,6 +122,7 @@ const NPCS = {
         barrier: 40,
         damage: 20,
         attackRange: 1.5,
+        sightRange: 4,
         attackEveryMs: 1000,
         speed: 1,
     },
@@ -126,6 +133,7 @@ const NPCS = {
         barrier: 50,
         damage: 10,
         attackRange: 1,
+        sightRange: 3,
         attackEveryMs: 1000,
         speed: 1,
         integrityPerTujaiLevel: 10,
@@ -206,19 +214,22 @@ export default function createGame(options = {}) {
     }
 
     function notifyRoomState(room, reason) {
-        const publicState = getPublicState(room.hostKey)
+        updateVisionMemories(room)
 
         debugLog(room, 'state-update', {
             reason,
             summary: summarizeRoom(room),
         })
 
-        notifyAll({
-            type: 'state-update',
-            hostKey: room.hostKey,
-            reason,
-            state: publicState,
-        })
+        for (const playerId of Object.keys(room.players)) {
+            notifyAll({
+                type: 'state-update',
+                hostKey: room.hostKey,
+                playerId,
+                reason,
+                state: getPublicState(room.hostKey, playerId),
+            })
+        }
     }
 
     function debugLog(room, event, details = {}) {
@@ -270,7 +281,7 @@ export default function createGame(options = {}) {
 
         return {
             hostKey,
-            state: getPublicState(hostKey),
+            state: getPublicState(hostKey, command.playerId),
         }
     }
 
@@ -312,7 +323,7 @@ export default function createGame(options = {}) {
 
         return {
             hostKey,
-            state: getPublicState(hostKey),
+            state: getPublicState(hostKey, command.playerId),
         }
     }
 
@@ -360,7 +371,7 @@ export default function createGame(options = {}) {
         return {
             hostKey: room.hostKey,
             playerId,
-            state: getPublicState(room.hostKey),
+            state: getPublicState(room.hostKey, playerId),
         }
     }
 
@@ -525,6 +536,8 @@ export default function createGame(options = {}) {
             changed = spawnNpc(room, player, command)
         } else if (command.action === 'capture') {
             changed = startCaptureOrder(room, player, command)
+        } else if (command.action === 'move-capturer-to') {
+            changed = moveCaptureUnitTo(room, player, command)
         } else {
             handled = false
             addLog(room, player.gamerTag + ': acao desconhecida: ' + (command.action || 'vazia') + '.')
@@ -544,13 +557,21 @@ export default function createGame(options = {}) {
         return changed
     }
 
-    function getPublicState(hostKey) {
+    function getPublicState(hostKey, playerId = null) {
         const room = rooms[hostKey]
 
         if (!room) {
             return createPublicShell()
         }
 
+        if (!playerId || !room.players[playerId]) {
+            return createUnfilteredPublicState(room)
+        }
+
+        return createFilteredPublicState(room, playerId)
+    }
+
+    function createUnfilteredPublicState(room) {
         return {
             hostKey: room.hostKey,
             createdAt: room.createdAt,
@@ -568,7 +589,278 @@ export default function createGame(options = {}) {
             logs: room.logs.slice(),
             winnerId: room.winnerId,
             tick: room.tick,
+            fogMask: createFullVisibilityMask(),
+            memory: { structures: {} },
         }
+    }
+
+    function createFilteredPublicState(room, playerId) {
+        const fogMask = computeVisibilityMask(room, playerId)
+        const memory = refreshPlayerMemory(room, playerId, fogMask)
+
+        return {
+            hostKey: room.hostKey,
+            createdAt: room.createdAt,
+            hasHadCombatants: room.hasHadCombatants,
+            players: filterPlayersForVisibility(room, playerId, fogMask),
+            structures: filterStructuresForVisibility(room, playerId, fogMask),
+            units: filterUnitsForVisibility(room, playerId, fogMask),
+            screen: clone(SCREEN),
+            config: clone(CONFIG),
+            catalog: {
+                structures: clone(STRUCTURES),
+                research: clone(RESEARCH),
+                npcs: clone(NPCS),
+            },
+            logs: room.logs.slice(),
+            winnerId: room.winnerId,
+            tick: room.tick,
+            fogMask,
+            memory: clone(memory),
+        }
+    }
+
+    function updateVisionMemories(room) {
+        for (const playerId of Object.keys(room.players)) {
+            refreshPlayerMemory(room, playerId, computeVisibilityMask(room, playerId))
+        }
+    }
+
+    function computeVisibilityMask(room, playerId) {
+        const mask = createEmptyVisibilityMask()
+        const player = room.players[playerId]
+
+        if (!player) {
+            return mask
+        }
+
+        const base = room.structures[player.baseId]
+
+        if (base) {
+            markVisibleTile(mask, base.x, base.y)
+        }
+
+        for (const structure of Object.values(room.structures)) {
+            if (structure.ownerId !== playerId) {
+                continue
+            }
+
+            if (structure.disabled) {
+                continue
+            }
+
+            markVisibleRadius(mask, structure, getStructureSightRange(structure.type))
+        }
+
+        for (const unit of Object.values(room.units)) {
+            if (unit.ownerId !== playerId || !isUnitActiveForVision(unit)) {
+                continue
+            }
+
+            markVisibleRadius(mask, unit, getNpcSightRange(unit.type))
+        }
+
+        if (isPlayerAvailable(player)) {
+            markVisibleRadius(mask, player, getNpcSightRange('capturer'))
+        }
+
+        return mask
+    }
+
+    function refreshPlayerMemory(room, playerId, fogMask) {
+        const player = room.players[playerId]
+        const memory = ensurePlayerMemory(player)
+
+        if (!player) {
+            return memory
+        }
+
+        for (const structureId of Object.keys(memory.structures)) {
+            const remembered = memory.structures[structureId]
+
+            if (!isTileVisible(fogMask, remembered.x, remembered.y)) {
+                continue
+            }
+
+            const current = room.structures[structureId]
+            const currentAtTile = getStructureAt(room, remembered.x, remembered.y)
+
+            if (!current
+                || current.x !== remembered.x
+                || current.y !== remembered.y
+                || current.ownerId === playerId
+                || (currentAtTile && currentAtTile.structureId !== structureId)) {
+                delete memory.structures[structureId]
+            }
+        }
+
+        for (const structure of Object.values(room.structures)) {
+            if (structure.ownerId === playerId || !isTileVisible(fogMask, structure.x, structure.y)) {
+                continue
+            }
+
+            memory.structures[structure.structureId] = createStructureMemorySnapshot(room, structure)
+        }
+
+        return memory
+    }
+
+    function ensurePlayerMemory(player) {
+        if (!player) {
+            return { structures: {} }
+        }
+
+        if (!player.memory) {
+            player.memory = { structures: {} }
+        }
+
+        if (!player.memory.structures) {
+            player.memory.structures = {}
+        }
+
+        return player.memory
+    }
+
+    function createStructureMemorySnapshot(room, structure) {
+        return {
+            structureId: structure.structureId,
+            type: structure.type,
+            x: structure.x,
+            y: structure.y,
+            ownerId: structure.ownerId,
+            level: structure.level,
+            disabled: structure.disabled,
+            seenAt: room.tick,
+        }
+    }
+
+    function filterStructuresForVisibility(room, playerId, fogMask) {
+        const visibleStructures = {}
+
+        for (const structureId in room.structures) {
+            const structure = room.structures[structureId]
+
+            if (structure.ownerId === playerId || isTileVisible(fogMask, structure.x, structure.y)) {
+                visibleStructures[structureId] = clone(structure)
+            }
+        }
+
+        return visibleStructures
+    }
+
+    function filterUnitsForVisibility(room, playerId, fogMask) {
+        const visibleUnits = {}
+
+        for (const unitId in room.units) {
+            const unit = room.units[unitId]
+
+            if (unit.ownerId === playerId || isTileVisible(fogMask, unit.x, unit.y)) {
+                visibleUnits[unitId] = clone(unit)
+            }
+        }
+
+        return visibleUnits
+    }
+
+    function filterPlayersForVisibility(room, playerId, fogMask) {
+        const visiblePlayers = {}
+
+        for (const targetId in room.players) {
+            const player = room.players[targetId]
+
+            if (targetId === playerId) {
+                visiblePlayers[targetId] = clone(player)
+                continue
+            }
+
+            const publicPlayer = {
+                playerId: player.playerId,
+                gamerTag: player.gamerTag,
+                color: player.color,
+                alive: player.alive,
+                connected: player.connected,
+                isAi: player.isAi,
+                joinedAt: player.joinedAt,
+            }
+
+            if (hasVisibleEntityForPlayer(room, targetId, fogMask)) {
+                Object.assign(publicPlayer, {
+                    x: player.x,
+                    y: player.y,
+                    coal: player.coal,
+                    knowledge: player.knowledge,
+                    integrity: player.integrity,
+                    maxIntegrity: player.maxIntegrity,
+                    barrier: player.barrier,
+                    maxBarrier: player.maxBarrier,
+                    order: player.order,
+                    respawnAt: player.respawnAt,
+                    activeCaptureUnitId: player.activeCaptureUnitId,
+                    avatarDeployed: player.avatarDeployed,
+                })
+            }
+
+            visiblePlayers[targetId] = publicPlayer
+        }
+
+        return visiblePlayers
+    }
+
+    function hasVisibleEntityForPlayer(room, targetId, fogMask) {
+        const target = room.players[targetId]
+
+        if (target && isPlayerAvailable(target) && isTileVisible(fogMask, target.x, target.y)) {
+            return true
+        }
+
+        return Object.values(room.structures).some(structure => structure.ownerId === targetId && isTileVisible(fogMask, structure.x, structure.y))
+            || Object.values(room.units).some(unit => unit.ownerId === targetId && isTileVisible(fogMask, unit.x, unit.y))
+    }
+
+    function markVisibleRadius(mask, source, range) {
+        const sightRange = Math.max(0, Number(range) || 0)
+        const minX = Math.max(0, Math.floor(source.x - sightRange))
+        const maxX = Math.min(SCREEN.width - 1, Math.ceil(source.x + sightRange))
+        const minY = Math.max(0, Math.floor(source.y - sightRange))
+        const maxY = Math.min(SCREEN.height - 1, Math.ceil(source.y + sightRange))
+
+        for (let y = minY; y <= maxY; y += 1) {
+            for (let x = minX; x <= maxX; x += 1) {
+                if (distance(source, { x, y }) <= sightRange) {
+                    mask[y][x] = true
+                }
+            }
+        }
+    }
+
+    function markVisibleTile(mask, x, y) {
+        if (isInsideMap(x, y)) {
+            mask[y][x] = true
+        }
+    }
+
+    function isTileVisible(mask, x, y) {
+        return Number.isInteger(x)
+            && Number.isInteger(y)
+            && y >= 0
+            && y < mask.length
+            && x >= 0
+            && x < (mask[y] || []).length
+            && mask[y][x] === true
+    }
+
+    function getStructureSightRange(type) {
+        const catalog = STRUCTURES[type] || {}
+        return catalog.sightRange ?? catalog.attackRange ?? 0
+    }
+
+    function getNpcSightRange(type) {
+        const catalog = NPCS[type] || {}
+        return catalog.sightRange ?? catalog.attackRange ?? 0
+    }
+
+    function isUnitActiveForVision(unit) {
+        return Boolean(unit && unit.integrity > 0)
     }
 
     function getHostKeyForPlayer(playerId) {
@@ -618,6 +910,9 @@ export default function createGame(options = {}) {
             order: null,
             activeCaptureUnitId: null,
             avatarDeployed: false,
+            memory: {
+                structures: {},
+            },
             unlocked: {
                 cover: true,
                 taraque: false,
@@ -919,6 +1214,41 @@ export default function createGame(options = {}) {
     }
 
 
+    function moveCaptureUnitTo(room, player, command) {
+        if (!isPlayerCommandable(player)) {
+            addLog(room, player.gamerTag + ': aguarde o reaparecimento para mover o Capturador.')
+            return false
+        }
+
+        if (!Number.isInteger(command.x) || !Number.isInteger(command.y) || !isInsideMap(command.x, command.y)) {
+            addLog(room, player.gamerTag + ': destino invalido para o Capturador.')
+            return false
+        }
+
+        const captureUnit = getPlayerCaptureUnit(room, player) || spawnCaptureUnit(room, player)
+
+        if (!captureUnit) {
+            addLog(room, player.gamerTag + ': sem espaco livre perto da Base para mover o Capturador.')
+            return false
+        }
+
+        const order = {
+            type: 'move',
+            x: command.x,
+            y: command.y,
+            unitId: captureUnit.unitId,
+            createdAt: Date.now(),
+        }
+
+        captureUnit.order = order
+        player.order = order
+        player.activeCaptureUnitId = captureUnit.unitId
+        syncPlayerToCaptureUnit(player, captureUnit)
+        resetCapturesForPlayer(room, player.playerId)
+        addLog(room, player.gamerTag + ' moveu o Capturador para reconhecimento.')
+        return true
+    }
+
     function startCaptureOrder(room, player, command) {
         const structure = room.structures[command.structureId]
 
@@ -1070,6 +1400,22 @@ export default function createGame(options = {}) {
     }
 
     function processCaptureUnitOrder(room, unit, now) {
+        if (unit.order.type === 'move') {
+            const target = { x: unit.order.x, y: unit.order.y }
+
+            if (!isInsideMap(target.x, target.y)) {
+                clearCaptureUnitOrder(room, unit)
+                return true
+            }
+
+            if (distance(unit, target) <= 0) {
+                clearCaptureUnitOrder(room, unit)
+                return true
+            }
+
+            return moveUnitToward(room, unit, target, 0)
+        }
+
         const structure = room.structures[unit.order.structureId]
 
         if (!structure || !STRUCTURES[structure.type] || !STRUCTURES[structure.type].captureable) {
@@ -1225,7 +1571,7 @@ export default function createGame(options = {}) {
 
             try {
                 const decision = decide({
-                    state: getPublicState(room.hostKey),
+                    state: getPublicState(room.hostKey, playerId),
                     playerId,
                     now,
                     memory: clone(memory),
@@ -2050,11 +2396,22 @@ export default function createGame(options = {}) {
             tickRoom,
             runAiPlayers,
             debugLog,
+            createUnfilteredPublicState,
+            createFilteredPublicState,
+            updateVisionMemories,
+            computeVisibilityMask,
+            refreshPlayerMemory,
+            filterPlayersForVisibility,
+            filterStructuresForVisibility,
+            filterUnitsForVisibility,
+            getStructureSightRange,
+            getNpcSightRange,
             createStructure,
             buildStructure,
             upgradeStructure,
             researchRecipe,
             spawnNpc,
+            moveCaptureUnitTo,
             startCaptureOrder,
             processPlayerRespawns,
             regenerateBarriers,
@@ -2167,7 +2524,17 @@ function createPublicShell() {
         logs: [],
         winnerId: null,
         tick: 0,
+        fogMask: createEmptyVisibilityMask(),
+        memory: { structures: {} },
     }
+}
+
+function createEmptyVisibilityMask() {
+    return Array.from({ length: SCREEN.height }, () => Array.from({ length: SCREEN.width }, () => false))
+}
+
+function createFullVisibilityMask() {
+    return Array.from({ length: SCREEN.height }, () => Array.from({ length: SCREEN.width }, () => true))
 }
 
 function isInsideMap(x, y) {
