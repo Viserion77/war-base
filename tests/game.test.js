@@ -996,6 +996,46 @@ describe('createGame', () => {
         expect(game.__testing.getRoom(match.hostKey).hasHadCombatants).toBe(true)
     })
 
+    test('toggles autoplay so the neural agent can control an existing player', () => {
+        const agent = {
+            cooldownMs: 0,
+            decide: jest.fn(({ state }) => {
+                const target = Object.values(state.structures)
+                    .find(structure => structure.type === 'cover' && structure.ownerId === null)
+
+                return { action: 'capture', structureId: target.structureId }
+            }),
+        }
+        const game = createGame({ aiAgent: agent })
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const room = game.__testing.getRoom(match.hostKey)
+        const player = room.players['player-1']
+        const base = room.structures[player.baseId]
+        const visibleCover = game.__testing.createStructure(room, {
+            ownerId: null,
+            type: 'cover',
+            x: base.x + 2,
+            y: base.y,
+            disabled: true,
+        })
+        visibleCover.integrity = 0
+        visibleCover.barrier = 0
+
+        expect(game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'toggle-autoplay', enabled: true })).toBe(true)
+        expect(player.autoplay).toBe(true)
+        expect(room.aiPlayers['player-1']).toMatchObject({ playerId: 'player-1', autoplay: true })
+        expect(game.getPublicState(match.hostKey).players['player-1'].autoplay).toBe(true)
+        expect(game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'build', structureType: 'cover', x: base.x + 1, y: base.y })).toBe(false)
+
+        expect(game.__testing.runAiPlayers(room, 10000)).toBe(true)
+        expect(agent.decide).toHaveBeenCalledWith(expect.objectContaining({ playerId: 'player-1' }))
+        expect(player.order).toMatchObject({ type: 'capture', structureId: visibleCover.structureId })
+
+        expect(game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'toggle-autoplay', enabled: false })).toBe(true)
+        expect(player.autoplay).toBe(false)
+        expect(room.aiPlayers['player-1']).toBeUndefined()
+    })
+
     test('handles AI add denials and defensive agent branches', () => {
         const game = createGame()
         expect(game.addAiPlayer()).toEqual({ error: 'Sala nao encontrada.' })

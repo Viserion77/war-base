@@ -530,6 +530,7 @@ function updateHud(hud, game, currentPlayerId, uiState) {
         </section>
         <section class="panel">
             <div class="panel-title">Acoes</div>
+            ${autoplayButton(game, currentPlayer)}
             ${selectedPanel(game, currentPlayer, selectedStructure, uiState)}
             ${npcButton(game, currentPlayer, 'zunim')}
         </section>
@@ -623,6 +624,10 @@ function getResearchDisabledReason(game, player, recipe) {
         return 'Jogador fora da partida.'
     }
 
+    if (player.autoplay) {
+        return 'Autoplay ligado.'
+    }
+
     if (player.unlocked[recipe]) {
         return `${research.label} ja pesquisada.`
     }
@@ -649,6 +654,37 @@ function npcButton(game, player, npcType) {
     const cost = npc ? ` ${npc.cost}` : ''
 
     return `<button class="action-button" type="button" data-action="spawn-npc" data-npc="${npcType}" aria-label="Enviar ${escapeHtml(label)}${cost ? ' por' + cost + ' carvoes' : ''}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
+}
+
+function autoplayButton(game, player) {
+    const disabledReason = getAutoplayDisabledReason(game, player)
+    const enabled = !disabledReason
+    const nextEnabled = !(player && player.autoplay)
+    const label = nextEnabled ? 'Ligar autoplay' : 'Desligar autoplay'
+    const title = disabledReason || (nextEnabled ? 'IA assume seus comandos.' : 'Voltar ao controle manual.')
+    const activeClass = nextEnabled ? '' : ' active'
+
+    return '<button class="action-button autoplay-button' + activeClass + '" type="button" data-action="toggle-autoplay" data-enabled="' + String(nextEnabled) + '" title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(label) + '" ' + (enabled ? '' : 'disabled') + '>' + escapeHtml(label) + '</button>'
+}
+
+function getAutoplayDisabledReason(game, player) {
+    if (!game.state.hostKey) {
+        return 'Entre em uma sala primeiro.'
+    }
+
+    if (game.state.winnerId) {
+        return 'Partida encerrada.'
+    }
+
+    if (!player || !player.alive) {
+        return 'Jogador fora da partida.'
+    }
+
+    if (player.isAi) {
+        return 'IA ja controla este jogador.'
+    }
+
+    return ''
 }
 
 function addAiButton(game) {
@@ -684,6 +720,10 @@ function getSpawnNpcDisabledReason(game, player, npcType) {
 
     if (!player || !player.alive) {
         return 'Jogador fora da partida.'
+    }
+
+    if (player.autoplay) {
+        return 'Autoplay ligado.'
     }
 
     if (!player.unlocked.tujai) {
@@ -764,6 +804,10 @@ function getUpgradeDisabledReason(player, structure, cost) {
         return 'Selecione uma construcao sua para upgrade.'
     }
 
+    if (player.autoplay) {
+        return 'Autoplay ligado.'
+    }
+
     if (structure.disabled) {
         return 'Esta construcao esta desativada.'
     }
@@ -784,6 +828,10 @@ function getCaptureDisabledReason(game, player, structure) {
 
     if (!player || !player.alive) {
         return 'Jogador fora da partida.'
+    }
+
+    if (player.autoplay) {
+        return 'Autoplay ligado.'
     }
 
     if (player.respawnAt) {
@@ -811,7 +859,7 @@ function playersList(game, currentPlayerId) {
             || (first.joinedAt || 0) - (second.joinedAt || 0)
             || first.gamerTag.localeCompare(second.gamerTag))
         .map(player => {
-            const status = player.isAi ? 'IA' : player.connected === false ? 'offline' : playerStatusLabel(player)
+            const status = player.isAi ? 'IA' : player.autoplay ? 'Autoplay' : player.connected === false ? 'offline' : playerStatusLabel(player)
 
             return `
                 <div class="player-row ${player.playerId === currentPlayerId ? 'current' : ''} ${player.connected === false ? 'offline' : ''}">
@@ -897,6 +945,13 @@ function getPlacementStatus(state, player, uiState) {
         return {
             status: 'blocked',
             message: 'Jogador fora da partida.',
+        }
+    }
+
+    if (player.autoplay) {
+        return {
+            status: 'blocked',
+            message: 'Autoplay ligado.',
         }
     }
 
@@ -1147,6 +1202,8 @@ export const __renderTestables = {
     researchButton,
     getResearchDisabledReason,
     npcButton,
+    autoplayButton,
+    getAutoplayDisabledReason,
     addAiButton,
     getAddAiDisabledReason,
     getSpawnNpcDisabledReason,

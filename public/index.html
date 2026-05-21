@@ -459,6 +459,16 @@
             margin-top: 10px;
         }
 
+        .autoplay-button {
+            margin-bottom: 8px;
+        }
+
+        .autoplay-button.active {
+            background: rgba(42, 157, 143, 0.16);
+            border-color: rgba(42, 157, 143, 0.45);
+            color: #176f66;
+        }
+
         .player-row {
             display: grid;
             grid-template-columns: 12px minmax(0, 1fr) auto;
@@ -807,6 +817,13 @@
                 })
             }
 
+            if (action === 'toggle-autoplay') {
+                socket.emit('game-action', {
+                    action: 'toggle-autoplay',
+                    enabled: button.dataset.enabled === 'true',
+                })
+            }
+
             if (action === 'add-ai') {
                 socket.emit('add-ai', {
                     hostKey: game.state.hostKey,
@@ -826,6 +843,10 @@
             }
 
             const key = event.key.toLowerCase()
+
+            if (game.state.players[socket.id]?.autoplay) {
+                return
+            }
 
             if (!['w', 'a', 's', 'd'].includes(key)) {
                 return

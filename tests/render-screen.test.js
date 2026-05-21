@@ -198,6 +198,8 @@ describe('render-screen', () => {
         expect(hud.innerHTML).toContain('Vencedor: &lt;Alice&gt;')
         expect(hud.innerHTML).toContain('Capturando Cover')
         expect(hud.innerHTML).toContain('Adicionar IA')
+        expect(hud.innerHTML).toContain('Ligar autoplay')
+        expect(hud.innerHTML).toContain('data-action="toggle-autoplay" data-enabled="true" title="Partida encerrada."')
         expect(hud.innerHTML).toContain('data-action="add-ai" title="Partida encerrada."')
         expect(hud.innerHTML).toContain('aria-label="Adicionar uma IA neural" disabled')
         expect(hud.innerHTML).toContain('&lt;evento&gt;')
@@ -398,6 +400,10 @@ describe('render-screen', () => {
         expect(__renderTestables.playersList(game, 'p1')).toContain('offline')
         game.state.players.ai = { ...game.state.players.p2, playerId: 'ai', gamerTag: 'Bot', isAi: true, connected: true, alive: true }
         expect(__renderTestables.playersList(game, 'p1')).toContain('<small>IA</small>')
+        game.state.players.p1.autoplay = true
+        expect(__renderTestables.playersList(game, 'p1')).toContain('<small>Autoplay</small>')
+        expect(__renderTestables.getBuildDisabledReason(game, game.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'cover')).toBe('Autoplay ligado.')
+        expect(__renderTestables.autoplayButton({ state: { ...game.state, winnerId: null } }, game.state.players.p1)).toContain('Desligar autoplay')
         expect(__renderTestables.playerStatusLabel({ alive: true, activeCaptureUnitId: null, avatarDeployed: false })).toBe('pronta')
     })
 

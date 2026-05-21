@@ -358,6 +358,7 @@ export default function createGame(options = {}) {
             playerId,
             addedAt: Date.now(),
             lastDecisionAt: 0,
+            autoplay: true,
         }
         room.hasHadCombatants = Object.keys(room.players).length >= 2
         addLog(room, `${getPlayerName(room, playerId)} entrou como IA neural.`)
@@ -373,6 +374,60 @@ export default function createGame(options = {}) {
             playerId,
             state: getPublicState(room.hostKey, playerId),
         }
+    }
+
+    function toggleAutoplay(room, player, command = {}) {
+        const enabled = command.enabled == null ? !player.autoplay : command.enabled === true || command.enabled === 'true'
+
+        if (enabled) {
+            return enableAutoplay(room, player)
+        }
+
+        return disableAutoplay(room, player)
+    }
+
+    function enableAutoplay(room, player) {
+        if (!aiAgent) {
+            addLog(room, player.gamerTag + ': IA indisponivel para autoplay.')
+            return false
+        }
+
+        if (player.autoplay) {
+            return false
+        }
+
+        player.autoplay = true
+        room.aiPlayers[player.playerId] = room.aiPlayers[player.playerId] || {
+            playerId: player.playerId,
+            addedAt: Date.now(),
+            lastDecisionAt: 0,
+        }
+        room.aiPlayers[player.playerId].autoplay = true
+        addLog(room, player.gamerTag + ' ligou o autoplay.')
+        debugLog(room, 'ai:autoplay-enabled', {
+            playerId: player.playerId,
+            summary: summarizeRoom(room),
+        })
+        return true
+    }
+
+    function disableAutoplay(room, player) {
+        if (!player.autoplay) {
+            return false
+        }
+
+        player.autoplay = false
+
+        if (!player.isAi) {
+            delete room.aiPlayers[player.playerId]
+        }
+
+        addLog(room, player.gamerTag + ' desligou o autoplay.')
+        debugLog(room, 'ai:autoplay-disabled', {
+            playerId: player.playerId,
+            summary: summarizeRoom(room),
+        })
+        return true
     }
 
     function disconnectPlayer(command) {
@@ -425,6 +480,15 @@ export default function createGame(options = {}) {
                 playerId: command.playerId,
                 keyPressed: command.keyPressed,
                 reason: player ? 'jogador aguardando reaparecimento ou fora da partida' : 'jogador nao encontrado',
+            })
+            return
+        }
+
+        if (player.autoplay) {
+            debugLog(room, 'move:blocked', {
+                playerId: command.playerId,
+                keyPressed: command.keyPressed,
+                reason: 'autoplay ligado',
             })
             return
         }
@@ -526,7 +590,11 @@ export default function createGame(options = {}) {
         let changed = false
         let handled = true
 
-        if (command.action === 'build') {
+        if (command.action === 'toggle-autoplay') {
+            changed = toggleAutoplay(room, player, command)
+        } else if (player.autoplay && !command.fromAi) {
+            addLog(room, player.gamerTag + ': autoplay ligado. Desligue para emitir comandos manuais.')
+        } else if (command.action === 'build') {
             changed = buildStructure(room, player, command)
         } else if (command.action === 'upgrade') {
             changed = upgradeStructure(room, player, command)
@@ -780,6 +848,7 @@ export default function createGame(options = {}) {
                 alive: player.alive,
                 connected: player.connected,
                 isAi: player.isAi,
+                autoplay: player.autoplay,
                 joinedAt: player.joinedAt,
             }
 
@@ -895,6 +964,7 @@ export default function createGame(options = {}) {
             gamerTag,
             color,
             isAi: Boolean(command.isAi),
+            autoplay: Boolean(command.isAi),
             x: spawn.playerX,
             y: spawn.playerY,
             coal: CONFIG.initialCoal,
@@ -1566,7 +1636,7 @@ export default function createGame(options = {}) {
             const memory = room.aiPlayers[playerId]
             const player = room.players[playerId]
 
-            if (!player || !player.alive) {
+            if (!player || !player.alive || (!player.isAi && !player.autoplay)) {
                 delete room.aiPlayers[playerId]
                 continue
             }
@@ -1595,6 +1665,7 @@ export default function createGame(options = {}) {
                     ...decision,
                     playerId,
                     hostKey: room.hostKey,
+                    fromAi: true,
                 }) || changed
             } catch (error) {
                 debugLog(room, 'ai:error', {
@@ -2523,6 +2594,7 @@ export default function createGame(options = {}) {
             spawnNpc,
             moveCaptureUnitTo,
             startCaptureOrder,
+            toggleAutoplay,
             processPlayerRespawns,
             regenerateBarriers,
             processCaptureUnitOrders,
@@ -2571,6 +2643,8 @@ function summarizePlayer(player) {
         knowledge: player.knowledge,
         alive: player.alive,
         connected: player.connected,
+        isAi: player.isAi,
+        autoplay: player.autoplay,
         baseId: player.baseId,
         integrity: player.integrity,
         maxIntegrity: player.maxIntegrity,
