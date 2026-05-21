@@ -45,6 +45,7 @@ function createFakeGame() {
         movePlayer: jest.fn(),
         executeAction: jest.fn(),
         disconnectPlayer: jest.fn(),
+        getRoomCount: jest.fn(() => 0),
     }
 
     return game
@@ -153,9 +154,14 @@ describe('server infrastructure', () => {
 
             openServers.push(warBaseServer.server)
             await new Promise(resolve => warBaseServer.listen(resolve))
-            await expect(requestJson(warBaseServer.server, '/health')).resolves.toEqual({
+            await expect(requestJson(warBaseServer.server, '/health')).resolves.toMatchObject({
                 statusCode: 200,
-                body: { status: 'ok' },
+                body: {
+                    status: 'ok',
+                    activeRooms: 0,
+                    uptimeSeconds: expect.any(Number),
+                    timestamp: expect.any(String),
+                },
             })
 
             game.stateObserver({ type: 'state-update', hostKey: 'ABCDE', reason: 'join' })
@@ -164,13 +170,39 @@ describe('server infrastructure', () => {
             expect(sockets.on).toHaveBeenCalledWith('connection', expect.any(Function))
             sockets.handlers.connection(createFakeSocket())
 
+            const closed = new Promise(resolve => warBaseServer.server.once('close', resolve))
             warBaseServer.shutdown('SIGTERM')
             warBaseServer.shutdown('SIGTERM')
+            await closed
             expect(sockets.close).toHaveBeenCalledTimes(1)
             expect(exit).toHaveBeenCalledWith(0)
         } finally {
             jest.useRealTimers()
         }
+    })
+
+
+    test('health route tolerates game adapters without room counters', async () => {
+        const sockets = createFakeSockets()
+        const game = createFakeGame()
+        delete game.getRoomCount
+        const warBaseServer = createWarBaseServer({
+            port: 0,
+            game,
+            logsDirectory: fs.mkdtempSync(path.join(os.tmpdir(), 'war-base-server-')),
+            createSockets: () => sockets,
+        })
+
+        openServers.push(warBaseServer.server)
+        await new Promise(resolve => warBaseServer.listen(resolve))
+
+        await expect(requestJson(warBaseServer.server, '/health')).resolves.toMatchObject({
+            statusCode: 200,
+            body: {
+                status: 'ok',
+                activeRooms: null,
+            },
+        })
     })
 
     test('registers socket handlers for create, join, move, actions and disconnect', () => {
@@ -199,6 +231,30 @@ describe('server infrastructure', () => {
             playerId: 'socket-1',
             error: 'Sala nao encontrada.',
         })
+    })
+
+
+    test('shuts down cleanly before the HTTP server starts listening', () => {
+        jest.useFakeTimers()
+        try {
+            const sockets = createFakeSockets()
+            const exit = jest.fn()
+            const warBaseServer = createWarBaseServer({
+                port: 0,
+                game: createFakeGame(),
+                logger: { log: jest.fn(), error: jest.fn() },
+                exit,
+                logsDirectory: fs.mkdtempSync(path.join(os.tmpdir(), 'war-base-server-')),
+                createSockets: () => sockets,
+            })
+
+            warBaseServer.shutdown('SIGTERM')
+
+            expect(sockets.close).toHaveBeenCalledTimes(1)
+            expect(exit).toHaveBeenCalledWith(0)
+        } finally {
+            jest.useRealTimers()
+        }
     })
 
     test('forces shutdown when sockets do not close in time', () => {

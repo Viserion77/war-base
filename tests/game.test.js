@@ -30,6 +30,20 @@ describe('createGame', () => {
             alive: true,
         })
         expect(game.getHostKeyForPlayer('player-1')).toBe(result.hostKey)
+        expect(game.getRoomCount()).toBe(1)
+        expect(result.state.logs[0].id).toBe(result.hostKey + '-1')
+    })
+
+    test('sanitizes gamer tags and host keys consistently', () => {
+        const game = createGame()
+        const match = game.createMatch({
+            playerId: 'player-1',
+            gamerTag: '  Alice   Base  ',
+        })
+
+        expect(match.state.players['player-1'].gamerTag).toBe('Alice Base')
+        expect(game.__testing.normalizeHostKey(' ab-c_12!! ')).toBe('ABC12')
+        expect(game.__testing.sanitizeGamerTag('\n\t', 'fallback-player')).toBe('Player fall')
     })
 
     test('lets a second player join an existing match', () => {
@@ -81,6 +95,37 @@ describe('createGame', () => {
             gamerTag: 'Player 9',
             hostKey: match.hostKey,
         })).toEqual({ error: 'Sala cheia.' })
+    })
+
+    test('allows observers and timers to be cleaned up', () => {
+        jest.useFakeTimers()
+        try {
+            const game = createGame()
+            const commands = []
+            const debugEntries = []
+            const unsubscribe = game.subscribe(command => commands.push(command))
+            const unsubscribeDebug = game.subscribeDebug(entry => debugEntries.push(entry))
+            const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+
+            unsubscribe()
+            unsubscribe()
+            unsubscribeDebug()
+            unsubscribeDebug()
+            game.joinMatch({ playerId: 'player-2', gamerTag: 'Bob', hostKey: match.hostKey })
+            game.start()
+            game.stop()
+            game.stop()
+            jest.advanceTimersByTime(1000)
+
+            expect(commands).toEqual([])
+            expect(debugEntries).toEqual(expect.arrayContaining([
+                expect.objectContaining({ event: 'game-log' }),
+                expect.objectContaining({ event: 'match:create' }),
+            ]))
+            expect(debugEntries).not.toContainEqual(expect.objectContaining({ event: 'match:join-success' }))
+        } finally {
+            jest.useRealTimers()
+        }
     })
 
     test('notifies observers and debug observers for state changes', () => {

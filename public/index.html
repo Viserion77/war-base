@@ -1,8 +1,9 @@
-<html>
+<html lang="pt-BR">
 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1b9aaa">
     <title>War Base</title>
 
     <style>
@@ -89,6 +90,15 @@
         .connection-status {
             color: var(--muted);
             font-size: 0.86rem;
+            font-weight: 800;
+        }
+
+        .connection-status.online {
+            color: var(--green);
+        }
+
+        .connection-status.offline {
+            color: var(--danger);
         }
 
         .lobby {
@@ -140,6 +150,13 @@
         input:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(27, 154, 170, 0.16);
+        }
+
+        button:focus-visible,
+        input:focus-visible,
+        #screen:focus-visible {
+            outline: 3px solid rgba(27, 154, 170, 0.35);
+            outline-offset: 2px;
         }
 
         .lobby-actions {
@@ -208,6 +225,7 @@
 
         .board-wrap {
             min-width: 0;
+            overflow: auto;
             background: var(--paper);
             border: 1px solid var(--line);
             border-radius: 8px;
@@ -374,7 +392,7 @@
 
         .resource-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 8px;
         }
 
@@ -454,6 +472,10 @@
             font-weight: 900;
         }
 
+        .player-row.offline {
+            opacity: 0.62;
+        }
+
         .player-row span:nth-child(2) {
             overflow: hidden;
             text-overflow: ellipsis;
@@ -468,9 +490,18 @@
         }
 
         .log-line {
+            display: grid;
+            grid-template-columns: 42px minmax(0, 1fr);
+            gap: 7px;
             color: var(--muted);
             font-size: 0.84rem;
             line-height: 1.25;
+        }
+
+        .log-line time {
+            color: var(--coal);
+            font-variant-numeric: tabular-nums;
+            font-weight: 800;
         }
 
         .muted {
@@ -527,33 +558,33 @@
                 <span id="room-label">sem sala</span>
                 <button id="copy-room-key" class="room-copy-button" type="button" title="Copiar HostKey" aria-label="Copiar HostKey" hidden>Copiar</button>
             </div>
-            <div id="connection-status" class="connection-status">conectando</div>
+            <div id="connection-status" class="connection-status" role="status" aria-live="polite">conectando</div>
         </header>
 
         <section id="lobby" class="lobby">
-            <form id="lobby-form" class="lobby-card">
+            <form id="lobby-form" class="lobby-card" autocomplete="off">
                 <h2>Partida privada</h2>
                 <div class="field-stack">
                     <label>
                         GamerTag
-                        <input id="gamer-tag" name="gamerTag" maxlength="18" autocomplete="nickname" required>
+                        <input id="gamer-tag" name="gamerTag" maxlength="18" autocomplete="nickname" placeholder="Ex: Alice" spellcheck="false" aria-describedby="lobby-error" autofocus required>
                     </label>
                     <label>
                         HostKey
-                        <input id="host-key" name="hostKey" maxlength="8" autocomplete="off">
+                        <input id="host-key" name="hostKey" maxlength="5" autocomplete="off" autocapitalize="characters" inputmode="text" pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" spellcheck="false" aria-describedby="lobby-error">
                     </label>
                 </div>
                 <div class="lobby-actions">
                     <button class="primary-button" type="submit" data-mode="create">Criar partida</button>
                     <button class="secondary-button" type="submit" data-mode="join">Entrar</button>
                 </div>
-                <div id="lobby-error" class="error-line"></div>
+                <div id="lobby-error" class="error-line" role="alert" aria-live="assertive"></div>
             </form>
         </section>
 
         <section id="game-view" class="game-layout hidden">
             <div class="board-wrap">
-                <canvas id="screen" width="864" height="540"></canvas>
+                <canvas id="screen" width="864" height="540" tabindex="0" role="img" aria-label="Mapa da partida"></canvas>
             </div>
             <aside class="side-rail">
                 <section class="panel how-to-panel">
@@ -610,14 +641,27 @@
         const roomLabel = document.getElementById('room-label')
         const copyRoomKeyButton = document.getElementById('copy-room-key')
         const connectionStatus = document.getElementById('connection-status')
+        const gamerTagInput = document.getElementById('gamer-tag')
+        const hostKeyInput = document.getElementById('host-key')
+        const lobbySubmitButtons = Array.from(lobbyForm.querySelectorAll('button[type="submit"]'))
         let copyFeedbackTimeout = null
+        let lobbyPending = false
+
+        hydrateLobbyFields()
 
         socket.on('connect', () => {
-            connectionStatus.textContent = 'online'
+            setConnectionStatus('online', 'online')
+            setLobbyPending(false)
         })
 
         socket.on('disconnect', () => {
-            connectionStatus.textContent = 'offline'
+            setConnectionStatus('offline', 'offline')
+            setLobbyPending(false)
+        })
+
+        socket.on('connect_error', () => {
+            setConnectionStatus('erro de conexao', 'offline')
+            setLobbyPending(false)
         })
 
         lobbyForm.addEventListener('click', (event) => {
@@ -630,25 +674,46 @@
 
         lobbyForm.addEventListener('submit', (event) => {
             event.preventDefault()
-            lobbyError.textContent = ''
 
-            const formData = new FormData(lobbyForm)
-            const gamerTag = String(formData.get('gamerTag') || '').trim()
-            const hostKey = String(formData.get('hostKey') || '').trim().toUpperCase()
-
-            if (submitMode === 'join' && !hostKey) {
-                lobbyError.textContent = 'Informe uma HostKey.'
+            if (lobbyPending) {
                 return
             }
 
+            lobbyError.textContent = ''
+            submitMode = event.submitter ? event.submitter.dataset.mode : submitMode
+
+            const formData = new FormData(lobbyForm)
+            const gamerTag = String(formData.get('gamerTag') || '').trim()
+            const hostKey = normalizeHostKey(formData.get('hostKey'))
+
+            if (!gamerTag) {
+                lobbyError.textContent = 'Informe um GamerTag.'
+                gamerTagInput.focus()
+                return
+            }
+
+            if (submitMode === 'join' && !hostKey) {
+                lobbyError.textContent = 'Informe uma HostKey.'
+                hostKeyInput.focus()
+                return
+            }
+
+            localStorage.setItem('war-base:gamer-tag', gamerTag)
+            setLobbyPending(true)
             socket.emit(submitMode === 'join' ? 'join-match' : 'create-match', {
                 gamerTag,
                 hostKey,
             })
         })
 
+        hostKeyInput.addEventListener('input', () => {
+            hostKeyInput.value = normalizeHostKey(hostKeyInput.value)
+        })
+
         socket.on('setup', (result) => {
+            setLobbyPending(false)
             game.setState(result.state)
+            persistRoomInUrl(result.hostKey)
             enterGame()
         })
 
@@ -658,10 +723,12 @@
             }
 
             game.setState(command.state)
+            syncSelectionWithState()
             updateRoomHeader()
         })
 
         socket.on('join-error', (result) => {
+            setLobbyPending(false)
             lobbyError.textContent = result.error || 'Nao foi possivel entrar.'
         })
 
@@ -688,6 +755,7 @@
 
             uiState.selectedTile = tile
             uiState.selectedStructureId = structure ? structure.structureId : null
+            screen.focus({ preventScroll: true })
         })
 
         document.addEventListener('keydown', handleKeyboardShortcut)
@@ -843,6 +911,7 @@
             gameView.classList.remove('hidden')
             updateRoomHeader()
             setupScreen(screen, game)
+            screen.focus({ preventScroll: true })
 
             if (!renderStarted) {
                 renderScreen(screen, hud, game, requestAnimationFrame, socket.id, uiState)
@@ -854,6 +923,7 @@
             const hasRoom = Boolean(game.state.hostKey)
             roomLabel.textContent = hasRoom ? `sala ${game.state.hostKey}` : 'sem sala'
             copyRoomKeyButton.hidden = !hasRoom
+            document.title = hasRoom ? `War Base - ${game.state.hostKey}` : 'War Base'
         }
 
         async function copyText(text) {
@@ -887,6 +957,73 @@
             copyFeedbackTimeout = setTimeout(() => {
                 copyRoomKeyButton.textContent = 'Copiar'
             }, 1400)
+        }
+
+        function setConnectionStatus(label, statusClass) {
+            connectionStatus.textContent = label
+            connectionStatus.classList.toggle('online', statusClass === 'online')
+            connectionStatus.classList.toggle('offline', statusClass === 'offline')
+        }
+
+        function setLobbyPending(pending) {
+            lobbyPending = pending
+            for (const button of lobbySubmitButtons) {
+                button.disabled = pending
+            }
+        }
+
+        function normalizeHostKey(value) {
+            return String(value || '')
+                .trim()
+                .toUpperCase()
+                .replace(/[^A-Z0-9]/g, '')
+                .slice(0, 5)
+        }
+
+        function hydrateLobbyFields() {
+            const storedGamerTag = localStorage.getItem('war-base:gamer-tag')
+            const url = new URL(window.location.href)
+            const urlHostKey = url.searchParams.get('sala') || url.searchParams.get('hostKey')
+
+            if (storedGamerTag) {
+                gamerTagInput.value = storedGamerTag
+            }
+
+            if (urlHostKey) {
+                hostKeyInput.value = normalizeHostKey(urlHostKey)
+                submitMode = 'join'
+            }
+        }
+
+        function persistRoomInUrl(hostKey) {
+            if (!hostKey || !window.history.replaceState) {
+                return
+            }
+
+            const url = new URL(window.location.href)
+            url.searchParams.set('sala', hostKey)
+            window.history.replaceState(null, '', url)
+        }
+
+        function syncSelectionWithState() {
+            if (uiState.selectedStructureId && !game.state.structures[uiState.selectedStructureId]) {
+                uiState.selectedStructureId = null
+            }
+
+            if (!uiState.selectedTile) {
+                return
+            }
+
+            const { width, height } = game.state.screen
+            const outsideMap = uiState.selectedTile.x < 0
+                || uiState.selectedTile.y < 0
+                || uiState.selectedTile.x >= width
+                || uiState.selectedTile.y >= height
+
+            if (outsideMap) {
+                uiState.selectedTile = null
+                uiState.selectedStructureId = null
+            }
         }
 
     </script>

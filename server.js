@@ -20,8 +20,15 @@ export function createWarBaseServer(options = {}) {
     const server = http.createServer(app)
     const sockets = createSockets(server)
 
+    app.disable('x-powered-by')
+
     app.get('/health', (request, response) => {
-        response.json({ status: 'ok' })
+        response.json({
+            status: 'ok',
+            activeRooms: typeof game.getRoomCount === 'function' ? game.getRoomCount() : null,
+            uptimeSeconds: Math.floor(process.uptime()),
+            timestamp: new Date().toISOString(),
+        })
     })
 
     app.use(express.static('public'))
@@ -69,9 +76,20 @@ export function createWarBaseServer(options = {}) {
 
         sockets.close(() => {
             clearTimeout(forceExit)
-            logger.log('> Server closed')
-            exit(0)
+            closeHttpServer(() => {
+                logger.log('> Server closed')
+                exit(0)
+            })
         })
+    }
+
+    function closeHttpServer(callback) {
+        if (!server.listening) {
+            callback()
+            return
+        }
+
+        server.close(callback)
     }
 
     return {

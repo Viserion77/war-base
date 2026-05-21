@@ -25,6 +25,11 @@ function createCanvas(context) {
     return {
         width: 0,
         height: 0,
+        style: {},
+        attributes: {},
+        setAttribute(name, value) {
+            this.attributes[name] = value
+        },
         getContext: jest.fn(() => context),
         getBoundingClientRect: () => ({ left: 10, top: 20, width: 100, height: 50 }),
     }
@@ -151,7 +156,15 @@ describe('render-screen', () => {
 
         expect(canvas.width).toBe(50)
         expect(canvas.height).toBe(40)
+        expect(canvas.style.aspectRatio).toBe('5 / 4')
+        expect(canvas.attributes['aria-label']).toBe('Mapa da partida com 5 por 4 campos')
         expect(getTileFromCanvasEvent({ clientX: 60, clientY: 45 }, canvas, game)).toEqual({ x: 2, y: 2 })
+        expect(getTileFromCanvasEvent({ clientX: -100, clientY: -100 }, canvas, game)).toEqual({ x: 0, y: 0 })
+        expect(getTileFromCanvasEvent({ clientX: 1000, clientY: 1000 }, canvas, game)).toEqual({ x: 4, y: 3 })
+
+        const minimalCanvas = { width: 0, height: 0 }
+        setupScreen(minimalCanvas, game)
+        expect(minimalCanvas.width).toBe(50)
     })
 
     test('finds structures by tile', () => {
@@ -181,8 +194,11 @@ describe('render-screen', () => {
         expect(hud.innerHTML).toContain('Vencedor: &lt;Alice&gt;')
         expect(hud.innerHTML).toContain('Capturando Cover')
         expect(hud.innerHTML).toContain('Adicionar uma IA')
-        expect(hud.innerHTML).toContain('data-action="add-ai" title="IA em desenvolvimento." disabled')
+        expect(hud.innerHTML).toContain('data-action="add-ai" title="IA em desenvolvimento."')
+        expect(hud.innerHTML).toContain('aria-label="Adicionar uma IA em desenvolvimento" disabled')
         expect(hud.innerHTML).toContain('&lt;evento&gt;')
+        expect(hud.innerHTML).toContain('Estruturas')
+        expect(hud.innerHTML).toContain('Unidades')
     })
 
     test('renders build placement states and clears hud when no player is active', () => {
@@ -256,6 +272,8 @@ describe('render-screen', () => {
         expect(__renderTestables.getCaptureDisabledReason(game, { ...player, order: null }, cover)).toBe('')
 
         expect(__renderTestables.logsList({ state: { logs: [] } })).toContain('Sem eventos')
+        expect(__renderTestables.logsList({ state: { logs: [{ at: '2020-01-01T13:05:00.000Z', message: '<evento>' }] } })).toContain('<time>13:05</time>')
+        expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: { x: 7, y: 1 } }, 'missing')).toBe('Construcao indisponivel.')
         expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: null }, 'cover')).toBe('Selecione um terreno.')
         expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: { x: -1, y: 0 } }, 'cover')).toBe('Terreno invalido.')
         expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: { x: 50, y: 50 } }, 'cover')).toBe('Terreno invalido.')
@@ -280,7 +298,17 @@ describe('render-screen', () => {
         expect(__renderTestables.isInsideMap(game.state, 0, 0)).toBe(true)
         expect(__renderTestables.distance({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5)
         expect(__renderTestables.getStructureWeight('unknown')).toBe(10)
+        game.state.structures['disabled-owned'] = { ...game.state.structures['base-1'], structureId: 'disabled-owned', disabled: true }
+        expect(__renderTestables.getPlayerStructureCount(game.state, 'p1')).toBe(5)
+        expect(__renderTestables.getPlayerStructureCount({ structures: undefined }, 'p1')).toBe(0)
+        expect(__renderTestables.getPlayerUnitCount(game.state, 'p1')).toBe(1)
+        expect(__renderTestables.getPlayerUnitCount({ units: undefined }, 'p1')).toBe(0)
+        expect(__renderTestables.formatLogTime()).toBe('')
+        expect(__renderTestables.formatLogTime('invalid')).toBe('')
+        expect(__renderTestables.formatLogTime('2020-01-01T13:05:00.000Z')).toBe('13:05')
         expect(__renderTestables.formatNumber(1234.9)).toBe('1.234')
+        expect(__renderTestables.formatNumber(Infinity)).toBe('0')
+        expect(__renderTestables.clamp(7, 0, 4)).toBe(4)
         expect(__renderTestables.hexToRgba('bad', 0.5)).toBe('rgba(27, 154, 170, 0.5)')
         expect(__renderTestables.escapeHtml('&<>"\'')).toBe('&amp;&lt;&gt;&quot;&#039;')
     })
@@ -317,6 +345,8 @@ describe('render-screen', () => {
         expect(__renderTestables.getPlacementStatus(game.state, game.state.players.p1, { selectedTile: { x: 11, y: 7 } })).toEqual({ status: 'blocked', message: 'Fora do alcance de construcao.' })
         expect(__renderTestables.canBuild(game, { ...game.state.players.p1, unlocked: { custom: true } }, 'custom')).toBe(true)
         expect(__renderTestables.getActorAt(game.state, 2, 2)).toBe(game.state.players.p1)
+        game.state.players.p2.connected = false
+        expect(__renderTestables.playersList(game, 'p1')).toContain('offline')
         expect(__renderTestables.playerStatusLabel({ alive: true, activeCaptureUnitId: null, avatarDeployed: false })).toBe('pronta')
     })
 

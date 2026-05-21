@@ -170,18 +170,36 @@ export default function createGame() {
                 }
             }
         }, CONFIG.tickRateMs)
+
+        /* istanbul ignore next -- browser timers do not expose unref. */
+        if (typeof ticker.unref === 'function') {
+            ticker.unref()
+        }
+    }
+
+    function stop() {
+        if (!ticker) {
+            return
+        }
+
+        clearInterval(ticker)
+        ticker = null
     }
 
     function subscribe(observerFunction) {
         observers.push(observerFunction)
+
+        return () => unsubscribeObserver(observers, observerFunction)
     }
 
     function subscribeDebug(observerFunction) {
         debugObservers.push(observerFunction)
+
+        return () => unsubscribeObserver(debugObservers, observerFunction)
     }
 
     function notifyAll(command) {
-        for (const observerFunction of observers) {
+        for (const observerFunction of observers.slice()) {
             observerFunction(command)
         }
     }
@@ -215,8 +233,16 @@ export default function createGame() {
             details: clone(details),
         }
 
-        for (const observerFunction of debugObservers) {
+        for (const observerFunction of debugObservers.slice()) {
             observerFunction(entry)
+        }
+    }
+
+    function unsubscribeObserver(observerList, observerFunction) {
+        const index = observerList.indexOf(observerFunction)
+
+        if (index >= 0) {
+            observerList.splice(index, 1)
         }
     }
 
@@ -567,6 +593,7 @@ export default function createGame() {
             hasHadCombatants: false,
             nextStructureId: 1,
             nextUnitId: 1,
+            nextLogId: 1,
         }
 
         addNeutralFactories(room)
@@ -1854,7 +1881,7 @@ export default function createGame() {
 
     function addLog(room, message) {
         const logEntry = {
-            id: `${Date.now()}-${room.logs.length}`,
+            id: room.hostKey + '-' + room.nextLogId++,
             message,
             at: Date.now(),
         }
@@ -1883,12 +1910,17 @@ export default function createGame() {
         return hostKey
     }
 
+    function getRoomCount() {
+        return Object.keys(rooms).length
+    }
+
     return {
         state,
         setState,
         subscribe,
         subscribeDebug,
         start,
+        stop,
         createMatch,
         joinMatch,
         disconnectPlayer,
@@ -1896,6 +1928,7 @@ export default function createGame() {
         executeAction,
         getPublicState,
         getHostKeyForPlayer,
+        getRoomCount,
         __testing: {
             getRoom(hostKey) {
                 return rooms[hostKey]
@@ -1929,6 +1962,8 @@ export default function createGame() {
             getEmptyTileNear,
             getEmptyNeighbor,
             summarizeActor,
+            normalizeHostKey,
+            sanitizeGamerTag,
         },
     }
 }
@@ -2002,6 +2037,8 @@ function summarizeActor(actor) {
 function createPublicShell() {
     return {
         hostKey: null,
+        createdAt: null,
+        hasHadCombatants: false,
         players: {},
         structures: {},
         units: {},
@@ -2030,11 +2067,20 @@ function distance(first, second) {
 }
 
 function normalizeHostKey(hostKey) {
-    return String(hostKey || '').trim().toUpperCase()
+    return String(hostKey || '')
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 5)
 }
 
 function sanitizeGamerTag(gamerTag, fallback) {
-    const sanitized = String(gamerTag || '').trim().slice(0, 18)
+    const sanitized = String(gamerTag || '')
+        .replace(/[\u0000-\u001f\u007f]/g, ' ')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .slice(0, 18)
+        .trim()
 
     if (sanitized) {
         return sanitized

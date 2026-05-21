@@ -2,6 +2,14 @@ export function setupScreen(canvas, game) {
     const { screen: { width, height, pixelsPerFields } } = game.state
     canvas.width = width * pixelsPerFields
     canvas.height = height * pixelsPerFields
+
+    if (canvas.style) {
+        canvas.style.aspectRatio = width + ' / ' + height
+    }
+
+    if (canvas.setAttribute) {
+        canvas.setAttribute('aria-label', 'Mapa da partida com ' + width + ' por ' + height + ' campos')
+    }
 }
 
 export function getTileFromCanvasEvent(event, canvas, game) {
@@ -10,8 +18,12 @@ export function getTileFromCanvasEvent(event, canvas, game) {
     const scaleY = canvas.height / rect.height
     const x = Math.floor((event.clientX - rect.left) * scaleX / game.state.screen.pixelsPerFields)
     const y = Math.floor((event.clientY - rect.top) * scaleY / game.state.screen.pixelsPerFields)
+    const { width, height } = game.state.screen
 
-    return { x, y }
+    return {
+        x: clamp(x, 0, width - 1),
+        y: clamp(y, 0, height - 1),
+    }
 }
 
 export function getStructureAt(state, x, y) {
@@ -414,6 +426,8 @@ function updateHud(hud, game, currentPlayerId, uiState) {
                 <span><b>${formatNumber(currentPlayer.knowledge)}</b><small>Conhecimento</small></span>
                 <span><b>${currentPlayer.alive ? 'Ativa' : 'Fora'}</b><small>Base</small></span>
                 <span><b>${playerStatusLabel(currentPlayer)}</b><small>Unidade</small></span>
+                <span><b>${formatNumber(getPlayerStructureCount(game.state, currentPlayerId))}</b><small>Estruturas</small></span>
+                <span><b>${formatNumber(getPlayerUnitCount(game.state, currentPlayerId))}</b><small>Unidades</small></span>
             </div>
             ${captureStatusPanel(captureStatus)}
         </section>
@@ -505,7 +519,7 @@ function buildButton(game, player, uiState, type) {
     const enabled = !disabledReason
     const title = disabledReason ? ` title="${escapeHtml(disabledReason)}"` : ''
 
-    return `<button class="action-button" data-action="build" data-structure="${type}"${title} ${enabled ? '' : 'disabled'}>${catalog.label} ${catalog.cost}</button>`
+    return `<button class="action-button" type="button" data-action="build" data-structure="${type}" aria-label="Construir ${escapeHtml(catalog.label)} por ${catalog.cost} carvoes"${title} ${enabled ? '' : 'disabled'}>${catalog.label} ${catalog.cost}</button>`
 }
 
 function researchButton(game, player, recipe) {
@@ -516,7 +530,7 @@ function researchButton(game, player, recipe) {
     const label = research ? research.label : recipe
     const cost = research ? ` ${research.cost}` : ''
 
-    return `<button class="action-button" data-action="research" data-recipe="${recipe}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
+    return `<button class="action-button" type="button" data-action="research" data-recipe="${recipe}" aria-label="Pesquisar ${escapeHtml(label)}${cost ? ' por' + cost + ' conhecimentos' : ''}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
 }
 
 function getResearchDisabledReason(game, player, recipe) {
@@ -555,11 +569,11 @@ function npcButton(game, player, npcType) {
     const label = npc ? npc.label : npcType
     const cost = npc ? ` ${npc.cost}` : ''
 
-    return `<button class="action-button" data-action="spawn-npc" data-npc="${npcType}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
+    return `<button class="action-button" type="button" data-action="spawn-npc" data-npc="${npcType}" aria-label="Enviar ${escapeHtml(label)}${cost ? ' por' + cost + ' carvoes' : ''}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
 }
 
 function addAiButton() {
-    return '<button class="action-button add-ai-button" type="button" data-action="add-ai" title="IA em desenvolvimento." disabled>Adicionar uma IA</button>'
+    return '<button class="action-button add-ai-button" type="button" data-action="add-ai" title="IA em desenvolvimento." aria-label="Adicionar uma IA em desenvolvimento" disabled>Adicionar uma IA</button>'
 }
 
 function getSpawnNpcDisabledReason(game, player, npcType) {
@@ -615,7 +629,7 @@ function selectedPanel(game, player, selectedStructure, uiState) {
     const captureTitle = captureDisabledReason ? ' title="' + escapeHtml(captureDisabledReason) + '"' : ''
     const canCapture = !captureDisabledReason
     const captureButton = catalog.captureable
-        ? '<button class="action-button" data-action="capture" data-structure-id="' + selectedStructure.structureId + '"' + captureTitle + ' ' + (canCapture ? '' : 'disabled') + '>Iniciar captura</button>'
+        ? '<button class="action-button" type="button" data-action="capture" data-structure-id="' + selectedStructure.structureId + '" aria-label="Iniciar captura de ' + escapeHtml(catalog.label) + '"' + captureTitle + ' ' + (canCapture ? '' : 'disabled') + '>Iniciar captura</button>'
         : ''
     const orderStatus = player.order && player.order.type === 'capture' && player.order.structureId === selectedStructure.structureId
         ? '<span class="tile-status tile-status-available">Ordem de captura ativa</span>'
@@ -625,9 +639,10 @@ function selectedPanel(game, player, selectedStructure, uiState) {
         <div class="selected-card">
             <strong>${catalog.label} N${selectedStructure.level}</strong>
             <span>${escapeHtml(ownerName)}</span>
-            <span>${Math.max(0, Math.ceil(selectedStructure.integrity))}/${selectedStructure.maxIntegrity} HP</span>
+            <span>${formatNumber(Math.max(0, Math.ceil(selectedStructure.integrity)))}/${formatNumber(selectedStructure.maxIntegrity)} HP</span>
+            <span>${formatNumber(Math.max(0, Math.ceil(selectedStructure.barrier)))}/${formatNumber(selectedStructure.maxBarrier)} barreira</span>
             ${orderStatus}
-            <button class="action-button" data-action="upgrade" data-structure-id="${selectedStructure.structureId}"${title} ${canUpgrade ? '' : 'disabled'}>Upgrade ${upgradeCost}</button>
+            <button class="action-button" type="button" data-action="upgrade" data-structure-id="${selectedStructure.structureId}" aria-label="Melhorar ${escapeHtml(catalog.label)} por ${upgradeCost} carvoes"${title} ${canUpgrade ? '' : 'disabled'}>Upgrade ${upgradeCost}</button>
             ${captureButton}
         </div>
     `
@@ -681,13 +696,20 @@ function getCaptureDisabledReason(game, player, structure) {
 
 function playersList(game, currentPlayerId) {
     return Object.values(game.state.players)
-        .map(player => `
-            <div class="player-row ${player.playerId === currentPlayerId ? 'current' : ''}">
-                <span class="player-dot" style="background:${player.color}"></span>
-                <span>${escapeHtml(player.gamerTag)}</span>
-                <small>${playerStatusLabel(player)}</small>
-            </div>
-        `)
+        .sort((first, second) => Number(second.playerId === currentPlayerId) - Number(first.playerId === currentPlayerId)
+            || (first.joinedAt || 0) - (second.joinedAt || 0)
+            || first.gamerTag.localeCompare(second.gamerTag))
+        .map(player => {
+            const status = player.connected === false ? 'offline' : playerStatusLabel(player)
+
+            return `
+                <div class="player-row ${player.playerId === currentPlayerId ? 'current' : ''} ${player.connected === false ? 'offline' : ''}">
+                    <span class="player-dot" style="background:${player.color}"></span>
+                    <span>${escapeHtml(player.gamerTag)}</span>
+                    <small>${escapeHtml(status)}</small>
+                </div>
+            `
+        })
         .join('')
 }
 
@@ -697,12 +719,16 @@ function logsList(game) {
     }
 
     return game.state.logs
-        .map(log => `<div class="log-line">${escapeHtml(log.message)}</div>`)
+        .map(log => `<div class="log-line"><time>${formatLogTime(log.at)}</time><span>${escapeHtml(log.message)}</span></div>`)
         .join('')
 }
 
 function getBuildDisabledReason(game, player, uiState, type) {
     const catalog = game.state.catalog.structures[type]
+
+    if (!catalog) {
+        return 'Construcao indisponivel.'
+    }
 
     if (!uiState.selectedTile) {
         return 'Selecione um terreno.'
@@ -930,8 +956,47 @@ function getStructureWeight(type) {
     return weights[type] || 10
 }
 
+function getPlayerStructureCount(state, playerId) {
+    return Object.values(state.structures || {})
+        .filter(structure => structure.ownerId === playerId && !structure.disabled)
+        .length
+}
+
+function getPlayerUnitCount(state, playerId) {
+    return Object.values(state.units || {})
+        .filter(unit => unit.ownerId === playerId)
+        .length
+}
+
+function formatLogTime(timestamp) {
+    if (!timestamp) {
+        return ''
+    }
+
+    const date = new Date(timestamp)
+
+    if (Number.isNaN(date.getTime())) {
+        return ''
+    }
+
+    return date.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+    })
+}
+
 function formatNumber(value) {
-    return Math.floor(value).toLocaleString('pt-BR')
+    const number = Number(value)
+
+    if (!Number.isFinite(number)) {
+        return '0'
+    }
+
+    return Math.floor(number).toLocaleString('pt-BR')
+}
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value))
 }
 
 function hexToRgba(color, alpha) {
@@ -985,7 +1050,11 @@ export const __renderTestables = {
     isInsideMap,
     distance,
     getStructureWeight,
+    getPlayerStructureCount,
+    getPlayerUnitCount,
+    formatLogTime,
     formatNumber,
+    clamp,
     hexToRgba,
     escapeHtml,
 }

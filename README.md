@@ -31,12 +31,14 @@ npm start
 
 Acesse a partida em `http://localhost:4000`. O servidor usa a porta `4000` por padrão, mas aceita a variável `PORT` para outros ambientes, por exemplo `PORT=3000 npm start`.
 
-O endpoint `GET /health` retorna status `ok` e pode ser usado por checks de disponibilidade. Ao receber `SIGINT` ou `SIGTERM`, o servidor encerra as conexões HTTP e Socket.IO antes de finalizar.
+O endpoint `GET /health` retorna `status`, `activeRooms`, `uptimeSeconds` e `timestamp`, e pode ser usado por checks de disponibilidade. Ao receber `SIGINT` ou `SIGTERM`, o servidor encerra Socket.IO e o servidor HTTP antes de finalizar.
 
 ## Como Entrar
 
 - **Criar partida**: informe um GamerTag e o servidor gera uma HostKey de sala privada.
-- **Entrar em partida**: informe GamerTag e uma HostKey existente.
+- **Entrar em partida**: informe GamerTag e uma HostKey existente. A HostKey é normalizada para 5 caracteres alfanuméricos.
+- Também é possível pré-preencher a sala pela URL com `?sala=ABCDE`.
+- O navegador lembra o último GamerTag usado para agilizar novas partidas no mesmo dispositivo.
 - Cada jogador começa com uma Base e 750 carvões.
 
 ## Objetivo
@@ -67,6 +69,7 @@ Se o Capturador morrer, ele fica fora por 30 segundos e reaparece perto da Base.
 - `D`: iniciar captura do alvo capturável; se não houver alvo capturável selecionado, foca a Base.
 - `Esc`: limpa a seleção.
 - Clique no mapa: seleciona terreno ou construção.
+- O HUD mostra recursos, estado da unidade, estruturas ativas, unidades em campo, jogadores offline e horário dos eventos.
 
 ## Loop Do Servidor
 

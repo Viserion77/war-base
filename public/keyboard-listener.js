@@ -14,10 +14,6 @@ export default function createKeyboardListener(document) {
         'a',
         's',
         'd',
-        'W',
-        'A',
-        'S',
-        'D',
     ])
 
     function registerPlayerId(playerId) {
@@ -27,6 +23,16 @@ export default function createKeyboardListener(document) {
 
     function subscribe(observerFunction) {
         state.observers.push(observerFunction)
+
+        return () => unsubscribe(observerFunction)
+    }
+
+    function unsubscribe(observerFunction) {
+        const index = state.observers.indexOf(observerFunction)
+
+        if (index >= 0) {
+            state.observers.splice(index, 1)
+        }
     }
 
     function unsubscribeAll() {
@@ -43,9 +49,9 @@ export default function createKeyboardListener(document) {
     document.addEventListener('keydown', handleKeydown)
 
     function handleKeydown(event) {
-        const keyPressed = event.key
+        const keyPressed = normalizeKey(event.key)
 
-        if (!state.enabled || !acceptedKeys.has(keyPressed)) {
+        if (!state.enabled || isEditableTarget(event.target) || !acceptedKeys.has(keyPressed)) {
             return
         }
 
@@ -58,9 +64,23 @@ export default function createKeyboardListener(document) {
         })
     }
 
+    function destroy() {
+        unsubscribeAll()
+        document.removeEventListener('keydown', handleKeydown)
+    }
+
     return {
         subscribe,
         unsubscribeAll,
         registerPlayerId,
+        destroy,
     }
+}
+
+function normalizeKey(key) {
+    return key.length === 1 ? key.toLowerCase() : key
+}
+
+function isEditableTarget(target) {
+    return Boolean(target && (target.isContentEditable || target.matches('input, textarea, select')))
 }

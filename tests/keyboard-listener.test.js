@@ -8,15 +8,23 @@ function createDocument() {
         addEventListener(type, listener) {
             listeners[type] = listener
         },
+        removeEventListener(type, listener) {
+            if (listeners[type] === listener) {
+                delete listeners[type]
+            }
+        },
         dispatch(type, event) {
-            listeners[type](event)
+            if (listeners[type]) {
+                listeners[type](event)
+            }
         },
     }
 }
 
-function createEvent(key) {
+function createEvent(key, target = null) {
     return {
         key,
+        target,
         prevented: false,
         preventDefault() {
             this.prevented = true
@@ -45,35 +53,55 @@ describe('createKeyboardListener', () => {
         ])
     })
 
-    test('ignores keys while disabled and ignores unsupported keys', () => {
+    test('normalizes accepted keys and ignores disabled, unsupported, or editable targets', () => {
         const document = createDocument()
         const keyboard = createKeyboardListener(document)
         const commands = []
         const disabledEvent = createEvent('w')
         const unsupportedEvent = createEvent('x')
+        const editableEvent = createEvent('w', {
+            isContentEditable: false,
+            matches: selector => selector.includes('input'),
+        })
+        const uppercaseEvent = createEvent('W')
 
         keyboard.subscribe(command => commands.push(command))
         document.dispatch('keydown', disabledEvent)
         keyboard.registerPlayerId('player-1')
         document.dispatch('keydown', unsupportedEvent)
+        document.dispatch('keydown', editableEvent)
+        document.dispatch('keydown', uppercaseEvent)
 
         expect(disabledEvent.prevented).toBe(false)
         expect(unsupportedEvent.prevented).toBe(false)
-        expect(commands).toEqual([])
+        expect(editableEvent.prevented).toBe(false)
+        expect(uppercaseEvent.prevented).toBe(true)
+        expect(commands).toEqual([{ type: 'move-player', playerId: 'player-1', keyPressed: 'w' }])
     })
 
-    test('unsubscribeAll clears subscribers and disables movement', () => {
+    test('unsubscribe callbacks, unsubscribeAll, and destroy clear movement listeners', () => {
         const document = createDocument()
         const keyboard = createKeyboardListener(document)
         const commands = []
-        const event = createEvent('ArrowUp')
+        const unsubscribedEvent = createEvent('ArrowUp')
+        const disabledEvent = createEvent('ArrowUp')
+        const afterDestroyEvent = createEvent('ArrowDown')
 
-        keyboard.subscribe(command => commands.push(command))
+        const unsubscribe = keyboard.subscribe(command => commands.push(command))
         keyboard.registerPlayerId('player-1')
+        unsubscribe()
+        unsubscribe()
+        document.dispatch('keydown', unsubscribedEvent)
+        keyboard.subscribe(command => commands.push(command))
         keyboard.unsubscribeAll()
-        document.dispatch('keydown', event)
+        document.dispatch('keydown', disabledEvent)
+        keyboard.registerPlayerId('player-1')
+        keyboard.destroy()
+        document.dispatch('keydown', afterDestroyEvent)
 
-        expect(event.prevented).toBe(false)
+        expect(unsubscribedEvent.prevented).toBe(true)
+        expect(disabledEvent.prevented).toBe(false)
+        expect(afterDestroyEvent.prevented).toBe(false)
         expect(commands).toEqual([])
     })
 })
