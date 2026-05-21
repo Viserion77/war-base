@@ -1,6 +1,8 @@
 /* istanbul ignore file -- model orchestration is smoke-tested; generated policy coverage is not line-gated. */
 import { BOARD_SIZE, ESTIMATED_GAME_LENGTH_TICKS, SCALAR_INPUTS } from '../constants.js'
 
+const BUILD_LIMIT_TYPES = ['cover', 'taraque', 'per', 'hef', 'tujai']
+
 export function encodeScalars(state, playerId) {
     const players = state.players || {}
     const structures = state.structures || {}
@@ -30,6 +32,7 @@ export function encodeScalars(state, playerId) {
     const aliveEnemyCount = Object.values(players)
         .filter(candidate => candidate.playerId !== playerId && candidate.alive)
         .length
+    const buildLimits = state.catalog?.limits || {}
 
     return [
         ratio(player.coal, 1500),
@@ -56,6 +59,12 @@ export function encodeScalars(state, playerId) {
         ratio(aliveEnemyCount, 7),
         ratio(countVisibleTiles(state), BOARD_SIZE),
         ratio(state.tick || 0, ESTIMATED_GAME_LENGTH_TICKS),
+        getSlotRatio(buildLimits, 'cover'),
+        getSlotRatio(buildLimits, 'taraque'),
+        getSlotRatio(buildLimits, 'per'),
+        getSlotRatio(buildLimits, 'hef'),
+        getSlotRatio(buildLimits, 'tujai'),
+        getCappedTypesFraction(buildLimits),
     ]
 }
 
@@ -92,6 +101,19 @@ export function countVisibleTiles(state) {
 
 export function countStructures(structures, type) {
     return structures.filter(structure => structure.type === type).length
+}
+
+export function getSlotRatio(limits, type) {
+    const limit = limits[type]
+    return limit ? ratio(limit.current, Math.max(1, limit.max)) : 0
+}
+
+export function getCappedTypesFraction(limits) {
+    const cappedTypes = BUILD_LIMIT_TYPES
+        .filter(type => limits[type] && limits[type].current >= limits[type].max)
+        .length
+
+    return ratio(cappedTypes, BUILD_LIMIT_TYPES.length)
 }
 
 export function getMapDistance(state) {

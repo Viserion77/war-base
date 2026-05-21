@@ -44,6 +44,8 @@ const STRUCTURES = {
         coalRatePerLevel: 5,
         captureable: true,
         buildable: true,
+        buildLimitBase: 3,
+        buildLimitSlope: 2,
     },
     taraque: {
         label: 'Taraque',
@@ -56,6 +58,8 @@ const STRUCTURES = {
         captureable: true,
         buildable: true,
         requiresBaseLevel: 2,
+        buildLimitBase: 1,
+        buildLimitSlope: 1,
     },
     per: {
         label: 'Per',
@@ -69,6 +73,8 @@ const STRUCTURES = {
         captureable: true,
         buildable: true,
         requiresResearch: 'per',
+        buildLimitBase: 1,
+        buildLimitSlope: 1,
     },
     hef: {
         label: 'Hef',
@@ -83,6 +89,8 @@ const STRUCTURES = {
         captureable: true,
         buildable: true,
         requiresResearch: 'hef',
+        buildLimitBase: 1,
+        buildLimitSlope: 1,
     },
     tujai: {
         label: 'Tujai',
@@ -93,6 +101,8 @@ const STRUCTURES = {
         captureable: true,
         buildable: true,
         requiresResearch: 'tujai',
+        buildLimitBase: 1,
+        buildLimitSlope: 1,
     },
 }
 
@@ -679,6 +689,7 @@ export default function createGame(options = {}) {
                 structures: clone(STRUCTURES),
                 research: clone(RESEARCH),
                 npcs: clone(NPCS),
+                limits: computePlayerLimits(room, playerId),
             },
             logs: room.logs.slice(),
             winnerId: room.winnerId,
@@ -1082,6 +1093,16 @@ export default function createGame(options = {}) {
             return false
         }
 
+        const limitStatus = getBuildLimitStatus(room, player, type)
+
+        if (limitStatus && limitStatus.current >= limitStatus.max) {
+            const reason = limitStatus.current > limitStatus.max
+                ? 'sem novos slots ate cair abaixo do limite'
+                : 'suba a Base para liberar'
+            addLog(room, `${player.gamerTag}: ${catalog.label} ${limitStatus.current}/${limitStatus.max} - ${reason}.`)
+            return false
+        }
+
         if (!canBuildStructure(room, player, type)) {
             addLog(room, `${player.gamerTag} ainda nao liberou ${catalog.label}.`)
             return false
@@ -1150,6 +1171,22 @@ export default function createGame(options = {}) {
                 reason: 'estrutura desativada',
             })
             return false
+        }
+
+        if (structure.type !== 'base') {
+            const base = room.structures[player.baseId]
+
+            if (!base || structure.level >= base.level) {
+                const baseLevel = base ? base.level : 0
+                addLog(room, `${player.gamerTag}: ${STRUCTURES[structure.type].label} ja esta no nivel maximo permitido pela Base (lvl ${baseLevel}). Suba a Base para liberar.`)
+                debugLog(room, 'upgrade:denied', {
+                    player: summarizePlayer(player),
+                    structure: summarizeStructure(structure),
+                    baseLevel,
+                    reason: 'limite de nivel da base',
+                })
+                return false
+            }
         }
 
         const cost = getUpgradeCost(structure)
@@ -2329,15 +2366,30 @@ export default function createGame(options = {}) {
     }
 
     function canBuildStructure(room, player, type) {
+        const catalog = STRUCTURES[type]
+
+        if (!catalog || !catalog.buildable) {
+            return false
+        }
+
+        const base = room.structures[player.baseId]
+
+        if (!base) {
+            return false
+        }
+
+        const limitStatus = getBuildLimitStatus(room, player, type)
+
+        if (limitStatus.current >= limitStatus.max) {
+            return false
+        }
+
         if (type === 'cover') {
             return true
         }
 
-        const catalog = STRUCTURES[type]
-
         if (catalog.requiresBaseLevel) {
-            const base = room.structures[player.baseId]
-            return base && base.level >= catalog.requiresBaseLevel
+            return base.level >= catalog.requiresBaseLevel
         }
 
         if (catalog.requiresResearch) {
@@ -2345,6 +2397,53 @@ export default function createGame(options = {}) {
         }
 
         return Boolean(player.unlocked[type])
+    }
+
+    function getBuildLimitStatus(room, player, type) {
+        const base = room.structures[player.baseId]
+
+        if (!base) {
+            return null
+        }
+
+        return {
+            current: countActiveOwnedStructures(room, player.playerId, type),
+            max: getBuildLimit(type, base.level),
+        }
+    }
+
+    function getBuildLimit(type, baseLevel) {
+        const catalog = STRUCTURES[type]
+
+        if (!catalog || !catalog.buildable) {
+            return 0
+        }
+
+        const level = Math.max(1, Math.floor(Number(baseLevel) || 1))
+        return catalog.buildLimitBase + catalog.buildLimitSlope * (level - 1)
+    }
+
+    function countActiveOwnedStructures(room, playerId, type) {
+        return Object.values(room.structures)
+            .filter(structure => structure.ownerId === playerId)
+            .filter(structure => structure.type === type)
+            .filter(structure => !structure.disabled)
+            .length
+    }
+
+    function computePlayerLimits(room, playerId) {
+        const player = room.players[playerId]
+        const base = player ? room.structures[player.baseId] : null
+        const limits = {}
+
+        for (const type of Object.keys(STRUCTURES).filter(candidate => STRUCTURES[candidate].buildable)) {
+            limits[type] = {
+                current: countActiveOwnedStructures(room, playerId, type),
+                max: base ? getBuildLimit(type, base.level) : 0,
+            }
+        }
+
+        return limits
     }
 
     function isNearOwnedAnchor(room, playerId, x, y) {
@@ -2613,6 +2712,10 @@ export default function createGame(options = {}) {
             getStepToward,
             getRespawnTile,
             canBuildStructure,
+            getBuildLimitStatus,
+            getBuildLimit,
+            countActiveOwnedStructures,
+            computePlayerLimits,
             getEmptyTileNear,
             getEmptyNeighbor,
             summarizeActor,

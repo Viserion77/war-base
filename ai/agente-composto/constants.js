@@ -27,6 +27,12 @@ export const SCALAR_INPUTS = [
     'aliveEnemyCount',
     'visibleTilesFraction',
     'tickFraction',
+    'coverSlotRatio',
+    'taraqueSlotRatio',
+    'perSlotRatio',
+    'hefSlotRatio',
+    'tujaiSlotRatio',
+    'cappedTypesFraction',
 ]
 export const SCALAR_INPUT_SIZE = SCALAR_INPUTS.length
 export const COMPOSITE_INPUT_SIZE = BOARD_HISTORY_FRAMES * BOARD_SIZE + SCALAR_INPUT_SIZE
@@ -42,6 +48,7 @@ export const MACRO_ACTIONS = [
     'defend',
     'attack',
     'upgrade',
+    'upgrade-base',
     'scout',
     'wait',
 ]

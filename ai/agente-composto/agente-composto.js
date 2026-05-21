@@ -17,6 +17,7 @@ import {
     RESEARCH_ACTIONS,
 } from './constants.js'
 import {
+    countCappedTypes,
     criarComandoCaptura,
     criarComandoConstrucao,
     criarComandoParaAcao,
@@ -72,7 +73,15 @@ export function carregarRedeComposta(name, networksDir = DEFAULT_NETWORKS_DIR) {
     }
 
     const model = JSON.parse(fs.readFileSync(path, 'utf8'))
-    return RedeNeural.fromJSON(model.rede || model)
+    const serialized = model.rede || model
+
+    if (serialized.neuroniosEntrada !== spec.inputs
+        || serialized.neuroniosOcultos !== spec.hidden
+        || serialized.neuroniosSaida !== spec.outputs) {
+        return createZeroNetwork(spec.outputs)
+    }
+
+    return RedeNeural.fromJSON(serialized)
 }
 
 export function createZeroNetwork(outputs) {
@@ -150,6 +159,10 @@ export function montarComandoDaMacro(macro, redes, input, state, playerId) {
 
     if (macro === 'upgrade') {
         return criarComandoUpgrade(state, playerId, preverRede(redes.upgrade, input))
+    }
+
+    if (macro === 'upgrade-base') {
+        return criarComandoUpgrade(state, playerId, preverRede(redes['target-upgrade'], input), ['base'])
     }
 
     if (macro === 'scout') {
@@ -259,7 +272,7 @@ export function preverRede(rede, input) {
 }
 
 export function decidirHeuristicamente(state, playerId) {
-    const actions = [
+    const standardActions = [
         'capture',
         'build-cover',
         'upgrade-base',
@@ -273,6 +286,9 @@ export function decidirHeuristicamente(state, playerId) {
         'spawn-zunim',
         'scout',
     ]
+    const actions = countCappedTypes(state) >= 2
+        ? ['upgrade-base', ...standardActions.filter(action => action !== 'upgrade-base')]
+        : standardActions
 
     for (const action of actions) {
         const comando = criarComandoParaAcao(action, state, playerId)

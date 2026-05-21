@@ -12,6 +12,7 @@ import {
     FARM_ACTIONS,
     MACRO_ACTIONS,
     RESEARCH_ACTIONS,
+    SCALAR_INPUTS,
 } from '../ai/agente-composto/constants.js'
 import { encodeBoard, SPECTRAL_VALUES, toIndex } from '../ai/agente-composto/codificacao/board.js'
 import { encodeScalars } from '../ai/agente-composto/codificacao/escalares.js'
@@ -133,6 +134,13 @@ function createAiState() {
             npcs: {
                 zunim: { label: 'Zunim', cost: 80 },
             },
+            limits: {
+                cover: { current: 0, max: 5 },
+                taraque: { current: 1, max: 2 },
+                per: { current: 1, max: 2 },
+                hef: { current: 1, max: 2 },
+                tujai: { current: 1, max: 2 },
+            },
         },
     }
 }
@@ -199,11 +207,13 @@ describe('AI composite modules', () => {
         expect(board[toIndex(20, 20)]).toBe(SPECTRAL_VALUES.rememberedStructure)
         expect(board[toIndex(9, 5)]).toBe(SPECTRAL_VALUES.capturableDisabled)
 
-        expect(encodeScalars(state, 'missing')).toHaveLength(24)
+        expect(encodeScalars(state, 'missing')).toHaveLength(SCALAR_INPUTS.length)
         const scalars = encodeScalars(state, 'p1')
-        expect(scalars).toHaveLength(24)
+        expect(scalars).toHaveLength(SCALAR_INPUTS.length)
         expect(scalars[0]).toBe(1)
         expect(scalars[10]).toBe(1)
+        expect(scalars[SCALAR_INPUTS.indexOf('taraqueSlotRatio')]).toBe(0.5)
+        expect(scalars[SCALAR_INPUTS.indexOf('cappedTypesFraction')]).toBe(0)
 
         const frameBuffer = createFrameBuffer()
         const frames = frameBuffer.push('p1', board)
@@ -225,6 +235,7 @@ describe('AI composite modules', () => {
         expect(criarComandoConstrucao(state, 'p1', 'cover')).toMatchObject({ action: 'build', structureType: 'cover' })
         expect(criarComandoConstrucao({ ...state, players: { ...state.players, p1: { ...state.players.p1, coal: 0 } } }, 'p1', 'cover')).toBeNull()
         expect(criarComandoUpgrade(state, 'p1')).toEqual({ action: 'upgrade', structureId: 'base-1' })
+        expect(criarComandoUpgrade(state, 'p1', null, ['base'])).toEqual({ action: 'upgrade', structureId: 'base-1' })
         expect(criarComandoPesquisa({ ...state, players: { ...state.players, p1: { ...state.players.p1, unlocked: { ...state.players.p1.unlocked, per: false } } } }, 'p1', 'per')).toEqual({ action: 'research', recipe: 'per' })
         expect(criarComandoZunim(state, 'p1')).toEqual({ action: 'spawn-npc', npcType: 'zunim' })
         state.fogMask[20][30] = false
@@ -238,7 +249,12 @@ describe('AI composite modules', () => {
         expect(hooks.getCapturePriority({ ownerId: 'p2', disabled: false })).toBe(2)
         expect(hooks.canBuild(state, state.players.p1, 'custom')).toBe(true)
         expect(hooks.canBuild(state, state.players.p1, 'missing')).toBe(false)
+        expect(hooks.canBuild({ ...state, catalog: { ...state.catalog, limits: { ...state.catalog.limits, cover: { current: 5, max: 5 } } } }, state.players.p1, 'cover')).toBe(false)
+        expect(hooks.getUpgradeableTargets(state, 'p1').map(structure => structure.structureId)).not.toContain('taraque-1')
+        expect(hooks.getOwnBase(state, 'p1').structureId).toBe('base-1')
         expect(hooks.getUpgradePriority({ type: 'base' })).toBe(0)
+        expect(hooks.getUpgradePriority({ type: 'base' }, { cappedTypes: 1 })).toBe(-1)
+        expect(hooks.countCappedTypes({ ...state, catalog: { ...state.catalog, limits: { ...state.catalog.limits, cover: { current: 5, max: 5 }, taraque: { current: 2, max: 2 } } } })).toBe(2)
         expect(hooks.highestStructureLevel({ structures: undefined }, 'p1', 'taraque')).toBe(0)
         expect(hooks.getUpgradeCost(state, state.structures['base-1'])).toBe(1125)
         expect(hooks.getNearestEnemyBase(state, 'p1', state.structures['base-1']).structureId).toBe('base-2')
@@ -270,6 +286,7 @@ describe('AI composite modules', () => {
         expect(montarComandoDaMacro('defend', createNetworks({ macro: 'defend', defend: 'upgrade-defensive' }), input, state, 'p1')).toMatchObject({ action: 'upgrade' })
         expect(montarComandoDaMacro('attack', createNetworks({ macro: 'attack', attack: 'spawn-zunim' }), input, state, 'p1')).toEqual({ action: 'spawn-npc', npcType: 'zunim' })
         expect(montarComandoDaMacro('upgrade', createNetworks({ macro: 'upgrade' }), input, state, 'p1')).toMatchObject({ action: 'upgrade' })
+        expect(montarComandoDaMacro('upgrade-base', createNetworks({ macro: 'upgrade-base' }), input, state, 'p1')).toEqual({ action: 'upgrade', structureId: 'base-1' })
         expect(montarComandoDaMacro('scout', createNetworks({ macro: 'scout' }), input, state, 'p1')).toMatchObject({ action: 'move-capturer-to' })
         expect(montarComandoDaMacro('wait', networks, input, state, 'p1')).toBeNull()
     })
@@ -293,6 +310,18 @@ describe('AI composite modules', () => {
         const zeroDecision = decidirComRedes({ router: createZeroNetwork(MACRO_ACTIONS.length) }, state, 'p1', { heuristicFallback: false })
         expect(zeroDecision).toBeNull()
         expect(decidirHeuristicamente(state, 'p1')).toHaveProperty('action')
+        const cappedState = {
+            ...state,
+            catalog: {
+                ...state.catalog,
+                limits: {
+                    ...state.catalog.limits,
+                    cover: { current: 5, max: 5 },
+                    taraque: { current: 2, max: 2 },
+                },
+            },
+        }
+        expect(decidirHeuristicamente(cappedState, 'p1')).toMatchObject({ action: 'upgrade', structureId: 'base-1', aiDecision: { policy: 'heuristic:upgrade-base' } })
         expect(createCompositeWarBaseAgent({ networks: { router: createZeroNetwork(MACRO_ACTIONS.length) } }).decide({ state, playerId: 'p1' })).toHaveProperty('action')
     })
 })

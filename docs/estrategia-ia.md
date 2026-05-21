@@ -9,8 +9,8 @@ A IA e um jogador interno adicionado pelo servidor. A cada ciclo de decisao, ela
 O fluxo principal e:
 
 1. O servidor adiciona um jogador interno controlado por IA.
-2. O agente composto monta o input com 3 frames do tabuleiro espectral e 24 escalares.
-3. A rede `router` escolhe a macro-acao: `farm`, `capture`, `research`, `defend`, `attack`, `upgrade`, `scout` ou `wait`.
+2. O agente composto monta o input com 3 frames do tabuleiro espectral e 30 escalares.
+3. A rede `router` escolhe a macro-acao: `farm`, `capture`, `research`, `defend`, `attack`, `upgrade`, `upgrade-base`, `scout` ou `wait`.
 4. A sub-rede da macro-acao decide o detalhe: alvo, tile de construcao, pesquisa ou spawn.
 5. Os validadores deterministicos conferem recursos, requisitos, alcance e ocupacao do mapa.
 6. A primeira decisao valida vira um comando do jogo.
@@ -28,9 +28,9 @@ Isso faz a IA decidir com a mesma informacao espacial que um humano teria: alvos
 Cada decisao usa:
 
 - 3 frames do tabuleiro 48x30, codificados como valores espectrais em um vetor achatado;
-- 24 escalares de economia, tecnologia, composicao, alvos visiveis, memoria, inimigos vivos, fracao visivel do mapa e tick da partida.
+- 30 escalares de economia, tecnologia, composicao, alvos visiveis, memoria, inimigos vivos, fracao visivel do mapa, tick da partida e ocupacao dos slots de construcao.
 
-O tamanho final do input padrao e `4344` floats. A rede compartilhada de placement recebe mais 6 valores one-hot para o tipo de estrutura, totalizando `4350` floats.
+O tamanho final do input padrao e `4350` floats. A rede compartilhada de placement recebe mais 6 valores one-hot para o tipo de estrutura, totalizando `4356` floats.
 
 ## Redes
 
@@ -42,7 +42,8 @@ Arquitetura principal:
 - `research`: escolhe Per, Hef ou Tujai.
 - `defend`: decide torre defensiva ou upgrade defensivo.
 - `attack`: decide Tujai, Zunim ou torre avancada.
-- `upgrade`: escolhe estrutura propria para evoluir.
+- `upgrade`: escolhe estrutura propria nao-base para evoluir quando houver teto liberado.
+- `upgrade-base`: prioriza a Base quando slots de construcao estao cheios.
 - `scout`: escolhe tile para mover o Capturador.
 - `placement`: heatmap compartilhado para tiles de construcao.
 - `target-*`: heatmaps especializados para alvos.
@@ -53,9 +54,9 @@ Todas usam a infraestrutura feedforward em `ai/rede-neural/`.
 
 A camada em `ai/agente-composto/validadores.js` continua essencial. Ela impede comandos ilegais e transforma scores em acoes concretas. Exemplos:
 
-- construcoes precisam de carvao, requisitos liberados, tile livre e alcance de construcao;
+- construcoes precisam de carvao, requisitos liberados, tile livre, alcance de construcao e slot disponivel em `catalog.limits`;
 - pesquisas precisam de conhecimento e nivel minimo de Taraque;
-- upgrades so podem mirar estruturas proprias ativas com carvao suficiente;
+- upgrades so podem mirar estruturas proprias ativas com carvao suficiente; estruturas nao-base tambem precisam estar abaixo do nivel da Base;
 - capturas so miram estruturas capturaveis visiveis ou lembradas;
 - scout usa `move-capturer-to` para explorar tiles sob fog.
 

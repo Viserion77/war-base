@@ -125,6 +125,10 @@ A cada tick, o servidor processa:
 
 ## Construções
 
+Cada tipo construível tem limite atrelado ao nível da Base. O limite usa `base + slope * (nivelDaBase - 1)`: Cover começa em 3 slots e ganha +2 por nível; Taraque, Per, Hef e Tujai começam em 1 slot e ganham +1 por nível. Estruturas próprias desativadas não contam para o limite, enquanto capturas podem deixar o jogador acima do cap e bloquear novas construções daquele tipo até abrir espaço ou subir a Base.
+
+Estruturas que não são a Base só podem receber upgrade até o nível atual da Base. A Base não tem esse teto e é o eixo para liberar mais slots e níveis.
+
 ### Base
 
 - 1000 de integridade inicial.

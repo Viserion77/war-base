@@ -595,11 +595,15 @@ function getCaptureStatus(game, playerId) {
 
 function buildButton(game, player, uiState, type) {
     const catalog = game.state.catalog.structures[type]
+    const limit = getBuildLimit(game, type)
     const disabledReason = getBuildDisabledReason(game, player, uiState, type)
     const enabled = !disabledReason
     const title = disabledReason ? ` title="${escapeHtml(disabledReason)}"` : ''
+    const limitClass = getBuildLimitClass(limit)
+    const className = 'action-button build-button' + (limitClass ? ' ' + limitClass : '')
+    const limitLabel = limit ? `<small class="build-limit">${limit.current}/${limit.max}</small>` : ''
 
-    return `<button class="action-button" type="button" data-action="build" data-structure="${type}" aria-label="Construir ${escapeHtml(catalog.label)} por ${catalog.cost} carvoes"${title} ${enabled ? '' : 'disabled'}>${catalog.label} ${catalog.cost}</button>`
+    return `<button class="${className}" type="button" data-action="build" data-structure="${type}" aria-label="Construir ${escapeHtml(catalog.label)} por ${catalog.cost} carvoes"${title} ${enabled ? '' : 'disabled'}><span>${catalog.label} ${catalog.cost}</span>${limitLabel}</button>`
 }
 
 function researchButton(game, player, recipe) {
@@ -761,7 +765,8 @@ function selectedPanel(game, player, selectedStructure, uiState) {
     const owner = selectedStructure.ownerId ? game.state.players[selectedStructure.ownerId] : null
     const ownerName = owner ? owner.gamerTag : 'Neutro'
     const upgradeCost = Math.round(catalog.cost * (1.5 ** selectedStructure.level))
-    const upgradeDisabledReason = getUpgradeDisabledReason(player, selectedStructure, upgradeCost)
+    const base = player ? game.state.structures[player.baseId] : null
+    const upgradeDisabledReason = getUpgradeDisabledReason(player, selectedStructure, upgradeCost, base ? base.level : 0)
     const canUpgrade = !upgradeDisabledReason
     const title = upgradeDisabledReason ? ` title="${escapeHtml(upgradeDisabledReason)}"` : ''
     const captureDisabledReason = getCaptureDisabledReason(game, player, selectedStructure)
@@ -799,7 +804,7 @@ function selectedPanel(game, player, selectedStructure, uiState) {
     `
 }
 
-function getUpgradeDisabledReason(player, structure, cost) {
+function getUpgradeDisabledReason(player, structure, cost, baseLevel = 0) {
     if (structure.ownerId !== player.playerId) {
         return 'Selecione uma construcao sua para upgrade.'
     }
@@ -810,6 +815,10 @@ function getUpgradeDisabledReason(player, structure, cost) {
 
     if (structure.disabled) {
         return 'Esta construcao esta desativada.'
+    }
+
+    if (structure.type !== 'base' && structure.level >= baseLevel) {
+        return 'Bloqueado: nivel da estrutura ja igual ao nivel da Base.'
     }
 
     if (player.coal < cost) {
@@ -899,6 +908,12 @@ function getBuildDisabledReason(game, player, uiState, type) {
         return placementStatus.message
     }
 
+    const limitReason = getBuildLimitDisabledReason(game, type)
+
+    if (limitReason) {
+        return limitReason
+    }
+
     if (!canBuild(game, player, type)) {
         return getBuildRequirementMessage(game, player, type)
     }
@@ -911,6 +926,12 @@ function getBuildDisabledReason(game, player, uiState, type) {
 }
 
 function getBuildRequirementMessage(game, player, type) {
+    const limitReason = getBuildLimitDisabledReason(game, type)
+
+    if (limitReason) {
+        return limitReason
+    }
+
     const catalog = game.state.catalog.structures[type]
 
     if (catalog.requiresBaseLevel) {
@@ -1004,11 +1025,19 @@ function getSelectionColor(placementStatus) {
 }
 
 function canBuild(game, player, type) {
+    const catalog = game.state.catalog.structures[type]
+
+    if (!catalog || !player) {
+        return false
+    }
+
+    if (getBuildLimitDisabledReason(game, type)) {
+        return false
+    }
+
     if (type === 'cover') {
         return true
     }
-
-    const catalog = game.state.catalog.structures[type]
 
     if (catalog.requiresBaseLevel) {
         const base = game.state.structures[player.baseId]
@@ -1022,6 +1051,39 @@ function canBuild(game, player, type) {
     return Boolean(player.unlocked[type])
 }
 
+function getBuildLimit(game, type) {
+    return game.state.catalog.limits?.[type] || null
+}
+
+function getBuildLimitClass(limit) {
+    if (!limit) {
+        return ''
+    }
+
+    if (limit.current > limit.max) {
+        return 'limit-over'
+    }
+
+    if (limit.current === limit.max) {
+        return 'limit-full'
+    }
+
+    return 'limit-open'
+}
+
+function getBuildLimitDisabledReason(game, type) {
+    const limit = getBuildLimit(game, type)
+
+    if (!limit || limit.current < limit.max) {
+        return ''
+    }
+
+    if (limit.current > limit.max) {
+        return `${limit.current}/${limit.max} - sem novos slots ate cair abaixo do limite.`
+    }
+
+    return `${limit.current}/${limit.max} - suba a Base.`
+}
 
 function highestStructureLevel(state, playerId, type) {
     return Object.values(state.structures || {})
@@ -1217,6 +1279,9 @@ export const __renderTestables = {
     getPlacementStatus,
     getSelectionColor,
     canBuild,
+    getBuildLimit,
+    getBuildLimitClass,
+    getBuildLimitDisabledReason,
     highestStructureLevel,
     getSelectedStructure,
     getActorAt,

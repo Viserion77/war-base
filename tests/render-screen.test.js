@@ -139,6 +139,13 @@ function createGameState() {
                 npcs: {
                     zunim: { label: 'Zunim', cost: 80 },
                 },
+                limits: {
+                    cover: { current: 0, max: 5 },
+                    taraque: { current: 1, max: 2 },
+                    per: { current: 1, max: 2 },
+                    hef: { current: 1, max: 2 },
+                    tujai: { current: 1, max: 2 },
+                },
             },
             logs: [{ message: '<evento>' }],
             winnerId: 'p1',
@@ -205,6 +212,7 @@ describe('render-screen', () => {
         expect(hud.innerHTML).toContain('&lt;evento&gt;')
         expect(hud.innerHTML).toContain('Estruturas')
         expect(hud.innerHTML).toContain('Unidades')
+        expect(hud.innerHTML).toContain('0/5')
     })
 
     test('renders fog overlays and remembered structures', () => {
@@ -285,11 +293,17 @@ describe('render-screen', () => {
         expect(__renderTestables.getResearchDisabledReason(game, player, 'per')).toBe('Conhecimento insuficiente: precisa de 15.')
         player.knowledge = 100
         expect(__renderTestables.getResearchDisabledReason(game, player, 'per')).toBe('')
+        player.autoplay = true
+        expect(__renderTestables.getResearchDisabledReason(game, player, 'per')).toBe('Autoplay ligado.')
+        player.autoplay = false
 
         expect(__renderTestables.addAiButton({ state: { ...game.state, winnerId: null } })).not.toContain('disabled')
         expect(__renderTestables.getAddAiDisabledReason({ state: { ...game.state, hostKey: null } })).toBe('Entre em uma sala primeiro.')
         expect(__renderTestables.getAddAiDisabledReason({ state: { ...game.state, winnerId: null, players: undefined } })).toBe('')
         expect(__renderTestables.getAddAiDisabledReason(game)).toBe('Partida encerrada.')
+        expect(__renderTestables.getAutoplayDisabledReason({ state: { ...game.state, hostKey: null } }, player)).toBe('Entre em uma sala primeiro.')
+        expect(__renderTestables.getAutoplayDisabledReason({ state: { ...game.state, winnerId: null } }, null)).toBe('Jogador fora da partida.')
+        expect(__renderTestables.getAutoplayDisabledReason({ state: { ...game.state, winnerId: null } }, { ...player, isAi: true })).toBe('IA ja controla este jogador.')
         const fullGame = createGameState()
         fullGame.state.winnerId = null
         fullGame.state.config.maxPlayersPerRoom = 3
@@ -300,6 +314,9 @@ describe('render-screen', () => {
         player.unlocked.tujai = false
         expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'zunim')).toBe('Pesquise Tujai primeiro.')
         player.unlocked.tujai = true
+        player.autoplay = true
+        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'zunim')).toBe('Autoplay ligado.')
+        player.autoplay = false
         game.state.structures['tujai-1'].disabled = true
         expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'zunim')).toBe('Construa uma Tujai ativa primeiro.')
         game.state.structures['tujai-1'].disabled = false
@@ -311,12 +328,15 @@ describe('render-screen', () => {
         expect(__renderTestables.selectedPanel(game, player, null, { selectedTile: null })).toContain('Nenhum terreno')
         expect(__renderTestables.getUpgradeDisabledReason(player, game.state.structures['base-2'], 1)).toBe('Selecione uma construcao sua para upgrade.')
         expect(__renderTestables.getUpgradeDisabledReason(player, { ...cover, ownerId: 'p1' }, 1)).toBe('Esta construcao esta desativada.')
+        expect(__renderTestables.getUpgradeDisabledReason({ ...player, autoplay: true }, { ...game.state.structures['per-1'], level: 1 }, 1, 2)).toBe('Autoplay ligado.')
+        expect(__renderTestables.getUpgradeDisabledReason(player, { ...game.state.structures['per-1'], level: 2 }, 1, 2)).toBe('Bloqueado: nivel da estrutura ja igual ao nivel da Base.')
         expect(__renderTestables.getUpgradeDisabledReason({ ...player, coal: 0 }, base, 999)).toBe('Carvao insuficiente: precisa de 999.')
         expect(__renderTestables.getUpgradeDisabledReason(player, base, 1)).toBe('')
 
         expect(__renderTestables.getCaptureDisabledReason({ state: { catalog: { structures: {} } } }, player, { type: 'unknown' })).toBe('Esta construcao nao pode ser capturada.')
         expect(__renderTestables.getCaptureDisabledReason(game, null, cover)).toBe('Jogador fora da partida.')
         expect(__renderTestables.getCaptureDisabledReason(game, { ...player, respawnAt: Date.now() + 1000 }, cover)).toContain('Avatar reaparece')
+        expect(__renderTestables.getCaptureDisabledReason(game, { ...player, autoplay: true }, cover)).toBe('Autoplay ligado.')
         expect(__renderTestables.getCaptureDisabledReason(game, player, { ...cover, ownerId: 'p1', disabled: false })).toBe('Esta construcao ja e sua.')
         expect(__renderTestables.getCaptureDisabledReason(game, player, { ...cover, ownerId: 'p1', disabled: true })).toBe('Construcao sua desativada.')
         expect(__renderTestables.getCaptureDisabledReason(game, player, cover)).toBe('Ordem de captura ja ativa.')
@@ -330,6 +350,20 @@ describe('render-screen', () => {
         expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: { x: 50, y: 50 } }, 'cover')).toBe('Terreno invalido.')
         expect(__renderTestables.getBuildDisabledReason(game, { ...player, alive: false }, { selectedTile: { x: 7, y: 1 } }, 'cover')).toBe('Jogador fora da partida.')
         expect(__renderTestables.getBuildDisabledReason(game, { ...player, coal: 0 }, { selectedTile: { x: 7, y: 1 } }, 'cover')).toBe('Carvao insuficiente: precisa de 540.')
+        const limitGame = createGameState()
+        limitGame.state.catalog.limits.cover = { current: 5, max: 5 }
+        expect(__renderTestables.getBuildDisabledReason(limitGame, limitGame.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'cover')).toBe('5/5 - suba a Base.')
+        expect(__renderTestables.getBuildRequirementMessage(limitGame, limitGame.state.players.p1, 'cover')).toBe('5/5 - suba a Base.')
+        expect(__renderTestables.canBuild(limitGame, limitGame.state.players.p1, 'cover')).toBe(false)
+        expect(__renderTestables.canBuild(limitGame, null, 'cover')).toBe(false)
+        expect(__renderTestables.canBuild(limitGame, limitGame.state.players.p1, 'missing')).toBe(false)
+        expect(__renderTestables.buildButton(limitGame, limitGame.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'cover')).toContain('limit-full')
+        limitGame.state.catalog.limits.cover = { current: 6, max: 5 }
+        expect(__renderTestables.getBuildLimitDisabledReason(limitGame, 'cover')).toBe('6/5 - sem novos slots ate cair abaixo do limite.')
+        expect(__renderTestables.buildButton(limitGame, limitGame.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'cover')).toContain('limit-over')
+        expect(__renderTestables.getBuildLimitClass(null)).toBe('')
+        expect(__renderTestables.getBuildLimitDisabledReason({ state: { catalog: {} } }, 'cover')).toBe('')
+
         expect(__renderTestables.getBuildRequirementMessage(game, player, 'taraque')).toBe('Base nivel 2 necessaria.')
         player.unlocked.per = false
         expect(__renderTestables.getBuildRequirementMessage(game, player, 'per')).toBe('Pesquise Per primeiro.')

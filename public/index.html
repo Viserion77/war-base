@@ -201,6 +201,46 @@
             filter: brightness(0.96);
         }
 
+        .build-button {
+            display: grid;
+            align-content: center;
+            gap: 2px;
+            min-height: 46px;
+            line-height: 1.15;
+        }
+
+        .build-button span,
+        .build-limit {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .build-limit {
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 900;
+        }
+
+        .build-button.limit-full {
+            border-color: rgba(246, 189, 22, 0.75);
+            background: rgba(246, 189, 22, 0.14);
+            color: #7a5100;
+        }
+
+        .build-button.limit-full .build-limit {
+            color: #7a5100;
+        }
+
+        .build-button.limit-over {
+            border-color: rgba(209, 73, 91, 0.78);
+            background: rgba(209, 73, 91, 0.12);
+            color: var(--danger);
+        }
+
+        .build-button.limit-over .build-limit {
+            color: var(--danger);
+        }
+
         .action-button:disabled,
         .primary-button:disabled,
         .secondary-button:disabled {

@@ -13,6 +13,23 @@ function getPlayer(state, playerId) {
     return state.players[playerId]
 }
 
+function createOwnedStructures(game, room, player, type, count) {
+    const base = room.structures[player.baseId]
+    const structures = []
+
+    for (let index = 0; index < count; index += 1) {
+        const tile = game.__testing.getEmptyTileNear(room, base.x, base.y, 6)
+        structures.push(game.__testing.createStructure(room, {
+            ownerId: player.playerId,
+            type,
+            x: tile.x,
+            y: tile.y,
+        }))
+    }
+
+    return structures
+}
+
 describe('createGame', () => {
     test('creates a match with a public state for the host player', () => {
         const game = createGame()
@@ -201,6 +218,133 @@ describe('createGame', () => {
             coal: 0,
             unlocked: expect.objectContaining({ taraque: true }),
         })
+    })
+
+    test('enforces build limits and frees disabled owned slots', () => {
+        const game = createGame()
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const room = game.__testing.getRoom(match.hostKey)
+        const player = room.players['player-1']
+        const base = room.structures[player.baseId]
+
+        player.coal = 5000
+        expect(game.__testing.getBuildLimit('cover', 1)).toBe(3)
+        expect(game.__testing.getBuildLimit('cover', 2)).toBe(5)
+        expect(game.__testing.getBuildLimit('cover', 20)).toBe(41)
+        expect(game.__testing.getBuildLimit('missing', 1)).toBe(0)
+        expect(game.__testing.getBuildLimit('base', 1)).toBe(0)
+
+        const covers = createOwnedStructures(game, room, player, 'cover', 3)
+        const blockedTile = game.__testing.getEmptyTileNear(room, base.x, base.y, 6)
+
+        expect(game.__testing.canBuildStructure(room, player, 'cover')).toBe(false)
+        expect(game.executeAction({
+            playerId: 'player-1',
+            hostKey: match.hostKey,
+            action: 'build',
+            structureType: 'cover',
+            x: blockedTile.x,
+            y: blockedTile.y,
+        })).toBe(false)
+        expect(room.logs[0].message).toBe('Alice: Cover 3/3 - suba a Base para liberar.')
+
+        covers[0].disabled = true
+        covers[0].integrity = 0
+        covers[0].barrier = 0
+        const rebuiltTile = game.__testing.getEmptyTileNear(room, base.x, base.y, 6)
+
+        expect(game.__testing.canBuildStructure(room, player, 'cover')).toBe(true)
+        expect(game.executeAction({
+            playerId: 'player-1',
+            hostKey: match.hostKey,
+            action: 'build',
+            structureType: 'cover',
+            x: rebuiltTile.x,
+            y: rebuiltTile.y,
+        })).toBe(true)
+        expect(game.__testing.countActiveOwnedStructures(room, 'player-1', 'cover')).toBe(3)
+        expect(room.logs[0].message).toBe('Alice construiu Cover.')
+    })
+
+    test('caps non-base upgrades at the owner base level', () => {
+        const game = createGame()
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const room = game.__testing.getRoom(match.hostKey)
+        const player = room.players['player-1']
+        const base = room.structures[player.baseId]
+        const cover = createOwnedStructures(game, room, player, 'cover', 1)[0]
+
+        player.coal = 10000
+        expect(game.__testing.upgradeStructure(room, player, { structureId: base.structureId })).toBe(true)
+        expect(base.level).toBe(2)
+        expect(game.__testing.upgradeStructure(room, player, { structureId: cover.structureId })).toBe(true)
+        expect(cover.level).toBe(2)
+
+        expect(game.__testing.upgradeStructure(room, player, { structureId: cover.structureId })).toBe(false)
+        expect(room.logs[0].message).toBe('Alice: Cover ja esta no nivel maximo permitido pela Base (lvl 2). Suba a Base para liberar.')
+
+        expect(game.__testing.upgradeStructure(room, player, { structureId: base.structureId })).toBe(true)
+        expect(base.level).toBe(3)
+        expect(game.__testing.upgradeStructure(room, player, { structureId: cover.structureId })).toBe(true)
+        expect(cover.level).toBe(3)
+    })
+
+    test('allows capture over cap but blocks more builds of that type', () => {
+        const game = createGame()
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const room = game.__testing.getRoom(match.hostKey)
+        const player = room.players['player-1']
+        const base = room.structures[player.baseId]
+
+        player.coal = 5000
+        createOwnedStructures(game, room, player, 'cover', 3)
+        const targetTile = game.__testing.getEmptyTileNear(room, base.x, base.y, 6)
+        const target = game.__testing.createStructure(room, {
+            ownerId: null,
+            type: 'cover',
+            x: targetTile.x,
+            y: targetTile.y,
+            disabled: true,
+        })
+
+        game.__testing.captureStructure(room, target, player)
+        expect(game.__testing.countActiveOwnedStructures(room, 'player-1', 'cover')).toBe(4)
+        expect(target.ownerId).toBe('player-1')
+        expect(target.disabled).toBe(false)
+
+        const buildTile = game.__testing.getEmptyTileNear(room, base.x, base.y, 6)
+        expect(game.executeAction({
+            playerId: 'player-1',
+            hostKey: match.hostKey,
+            action: 'build',
+            structureType: 'cover',
+            x: buildTile.x,
+            y: buildTile.y,
+        })).toBe(false)
+        expect(room.logs[0].message).toBe('Alice: Cover 4/3 - sem novos slots ate cair abaixo do limite.')
+    })
+
+    test('exposes filtered build limits in the public catalog', () => {
+        const game = createGame()
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const room = game.__testing.getRoom(match.hostKey)
+        const player = room.players['player-1']
+
+        createOwnedStructures(game, room, player, 'cover', 1)
+
+        const filtered = game.getPublicState(match.hostKey, 'player-1')
+        const unfiltered = game.getPublicState(match.hostKey)
+
+        expect(filtered.catalog.structures.cover).toMatchObject({ buildLimitBase: 3, buildLimitSlope: 2 })
+        expect(filtered.catalog.limits).toMatchObject({
+            cover: { current: 1, max: 3 },
+            taraque: { current: 0, max: 1 },
+            per: { current: 0, max: 1 },
+            hef: { current: 0, max: 1 },
+            tujai: { current: 0, max: 1 },
+        })
+        expect(game.__testing.computePlayerLimits(room, 'missing').cover).toEqual({ current: 0, max: 0 })
+        expect(unfiltered.catalog.limits).toBeUndefined()
     })
 
     test('generates resources and researches a tower unlock', () => {
@@ -847,6 +991,8 @@ describe('createGame', () => {
         expect(captureTarget.capture).toBeNull()
 
         expect(hooks.canBuildStructure(room, playerOne, 'base')).toBe(false)
+        expect(hooks.canBuildStructure(room, { ...playerOne, baseId: 'missing-base' }, 'cover')).toBe(false)
+        expect(hooks.getBuildLimitStatus(room, { ...playerOne, baseId: 'missing-base' }, 'cover')).toBeNull()
         const tinyRoom = {
             structures: { block: { x: 1, y: 0 } },
             players: {},
@@ -875,9 +1021,23 @@ describe('createGame', () => {
         const baseOne = room.structures[playerOne.baseId]
         const baseTwo = room.structures[playerTwo.baseId]
 
+        expect(game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'toggle-autoplay', enabled: true })).toBe(false)
+        expect(room.logs[0].message).toBe('Alice: IA indisponivel para autoplay.')
+        expect(game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'toggle-autoplay', enabled: false })).toBe(false)
+        playerOne.autoplay = true
+        game.movePlayer({ playerId: 'player-1', hostKey: match.hostKey, keyPressed: 'd' })
+        playerOne.autoplay = false
+
         game.movePlayer({ playerId: 'player-1', hostKey: match.hostKey, keyPressed: 'w' })
         game.executeAction({ playerId: 'player-1', action: undefined })
         game.executeAction({ playerId: 'ghost', action: 'build', structureType: 'cover', x: 1, y: 1 })
+
+        const orderedCover = hooks.createStructure(room, { ownerId: 'player-2', type: 'cover', x: 31, y: 21 })
+        room.units['ordered-capturer'] = { unitId: 'ordered-capturer', ownerId: 'player-1', type: 'capturer', x: 30, y: 21, integrity: 10, maxIntegrity: 10, barrier: 0, maxBarrier: 0, order: { type: 'capture', structureId: orderedCover.structureId } }
+        playerOne.order = { type: 'capture', structureId: orderedCover.structureId }
+        hooks.applyDamageToStructure(room, orderedCover, 10000, now + 1, 'player-1', { removeOnDestroyed: true })
+        expect(room.units['ordered-capturer'].order).toBeNull()
+        expect(playerOne.order).toBeNull()
 
         const disabledCover = hooks.createStructure(room, { ownerId: 'player-2', type: 'cover', x: 10, y: 10, disabled: true })
         const capturer = {
@@ -912,6 +1072,20 @@ describe('createGame', () => {
         expect(playerOne.barrier).toBe(1)
 
         room.units = {}
+        const obstacleActor = { unitId: 'obstacle-actor', ownerId: 'player-1', type: 'zunim', x: baseTwo.x - 1, y: baseTwo.y - 1, integrity: 10, maxIntegrity: 10, barrier: 0, maxBarrier: 0, damage: 1, attackRange: 1, attackEveryMs: 1000, lastAttackAt: 0, lastDamagedAt: 0 }
+        const obstacleCover = hooks.createStructure(room, { ownerId: 'player-2', type: 'cover', x: baseTwo.x - 2, y: baseTwo.y })
+        room.units[obstacleActor.unitId] = obstacleActor
+        const obstacleCooldown = { unitId: 'obstacle-cooldown', ownerId: 'player-1', type: 'zunim', x: baseTwo.x - 2, y: baseTwo.y - 1, integrity: 10, maxIntegrity: 10, barrier: 0, maxBarrier: 0, damage: 1, attackRange: 0.1, attackEveryMs: 1000, lastAttackAt: now + 3000, lastDamagedAt: 0 }
+        room.units[obstacleCooldown.unitId] = obstacleCooldown
+        expect(hooks.processNpcActions(room, now + 3500)).toBe(false)
+        delete room.units[obstacleCooldown.unitId]
+        const obstacleNoDamage = { ...obstacleCooldown, unitId: 'obstacle-no-damage', damage: 0, lastAttackAt: 0 }
+        room.units[obstacleNoDamage.unitId] = obstacleNoDamage
+        expect(hooks.processNpcActions(room, now + 5000)).toBe(false)
+        delete room.units[obstacleNoDamage.unitId]
+        delete room.units[obstacleActor.unitId]
+        delete room.structures[obstacleCover.structureId]
+
         const attackingZunim = { unitId: 'cooldown-zunim', ownerId: 'player-1', type: 'zunim', x: baseTwo.x - 1, y: baseTwo.y, integrity: 10, maxIntegrity: 10, barrier: 0, maxBarrier: 0, damage: 1, attackRange: 1, attackEveryMs: 1000, lastAttackAt: now, lastDamagedAt: 0 }
         room.units[attackingZunim.unitId] = attackingZunim
         expect(hooks.processNpcActions(room, now + 500)).toBe(false)

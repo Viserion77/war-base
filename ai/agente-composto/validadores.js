@@ -1,4 +1,6 @@
 /* istanbul ignore file -- model orchestration is smoke-tested; generated policy coverage is not line-gated. */
+const BUILD_LIMIT_TYPES = ['cover', 'taraque', 'per', 'hef', 'tujai']
+
 export function criarComandoParaAcao(acao, state, playerId, opcoes = {}) {
     if (acao === 'capture') {
         return criarComandoCaptura(state, playerId, opcoes.heatmap)
@@ -116,8 +118,10 @@ export function criarComandoUpgrade(state, playerId, heatmap = null, allowedType
         return null
     }
 
+    const context = { cappedTypes: countCappedTypes(state) }
+
     targets.sort((first, second) => getHeatmapScore(heatmap, second) - getHeatmapScore(heatmap, first)
-        || getUpgradePriority(first) - getUpgradePriority(second)
+        || getUpgradePriority(first, context) - getUpgradePriority(second, context)
         || getUpgradeCost(state, first) - getUpgradeCost(state, second))
 
     return {
@@ -284,6 +288,12 @@ export function canBuild(state, player, type) {
         return false
     }
 
+    const limit = state.catalog?.limits?.[type]
+
+    if (limit && limit.current >= limit.max) {
+        return false
+    }
+
     if (type === 'cover') {
         return true
     }
@@ -301,13 +311,36 @@ export function canBuild(state, player, type) {
 }
 
 export function getUpgradeableTargets(state, playerId) {
+    const base = getOwnBase(state, playerId)
+    const baseLevel = base ? base.level : 0
+
     return Object.values(state.structures || {})
         .filter(structure => structure.ownerId === playerId && !structure.disabled)
+        .filter(structure => structure.type === 'base' || structure.level < baseLevel)
 }
 
-export function getUpgradePriority(structure) {
+export function getOwnBase(state, playerId) {
+    const player = state.players?.[playerId]
+    return state.structures?.[player?.baseId] || Object.values(state.structures || {})
+        .find(structure => structure.ownerId === playerId && structure.type === 'base') || null
+}
+
+export function getUpgradePriority(structure, context = {}) {
+    if (structure.type === 'base' && context.cappedTypes > 0) {
+        return -1
+    }
+
     const priorities = { base: 0, per: 1, hef: 2, cover: 3, taraque: 4, tujai: 5 }
     return priorities[structure.type] ?? 10
+}
+
+export function countCappedTypes(state) {
+    return BUILD_LIMIT_TYPES
+        .filter(type => {
+            const limit = state.catalog?.limits?.[type]
+            return limit && limit.current >= limit.max
+        })
+        .length
 }
 
 export function highestStructureLevel(state, playerId, type) {
@@ -414,7 +447,9 @@ export const __validadoresTestables = {
     getBuildTileScore,
     canBuild,
     getUpgradeableTargets,
+    getOwnBase,
     getUpgradePriority,
+    countCappedTypes,
     highestStructureLevel,
     getUpgradeCost,
     getNearestEnemyBase,
