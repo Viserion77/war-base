@@ -634,6 +634,77 @@ describe('createGame', () => {
         expect(taraque).toBeDefined()
     })
 
+    test('lets troops jump allied structures, destroy path blockers, and respawn capturers near blocked bases', () => {
+        const game = createGame()
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        game.joinMatch({ playerId: 'player-2', gamerTag: 'Bob', hostKey: match.hostKey })
+        const room = game.__testing.getRoom(match.hostKey)
+        const hooks = game.__testing
+        const now = 500000
+        const playerOne = room.players['player-1']
+        const baseOne = room.structures[playerOne.baseId]
+
+        const jumper = { unitId: 'jump-zunim', ownerId: 'player-1', type: 'zunim', x: 10, y: 10 }
+        hooks.createStructure(room, { ownerId: 'player-1', type: 'cover', x: 11, y: 10, structureId: 'jump-allied-cover' })
+        expect(hooks.getStepToward(room, jumper, { x: 14, y: 10 })).toEqual({ x: 12, y: 10 })
+
+        const pathCapturer = {
+            unitId: 'path-capturer',
+            ownerId: 'player-1',
+            playerId: 'player-1',
+            type: 'capturer',
+            x: 10,
+            y: 12,
+            integrity: 160,
+            maxIntegrity: 160,
+            barrier: 40,
+            maxBarrier: 40,
+            damage: 25,
+            attackRange: 1,
+            attackEveryMs: 1000,
+            lastAttackAt: 0,
+            lastDamagedAt: 0,
+            order: { type: 'move', x: 14, y: 12 },
+        }
+        const enemyBlocker = hooks.createStructure(room, { ownerId: 'player-2', type: 'cover', x: 11, y: 12 })
+        enemyBlocker.integrity = 20
+        enemyBlocker.barrier = 0
+        room.units[pathCapturer.unitId] = pathCapturer
+        expect(hooks.processCaptureUnitOrder(room, pathCapturer, now)).toBe(true)
+        expect(room.structures[enemyBlocker.structureId]).toBeUndefined()
+        expect(pathCapturer.x).toBe(10)
+
+        const neutralBlocker = hooks.createStructure(room, { ownerId: null, type: 'cover', x: 11, y: 13 })
+        neutralBlocker.integrity = 20
+        neutralBlocker.barrier = 0
+        pathCapturer.y = 13
+        pathCapturer.lastAttackAt = 0
+        pathCapturer.order = { type: 'move', x: 14, y: 13 }
+        expect(hooks.processCaptureUnitOrder(room, pathCapturer, now + 2000)).toBe(true)
+        expect(room.structures[neutralBlocker.structureId]).toBeUndefined()
+
+        for (let dy = -4; dy <= 4; dy += 1) {
+            for (let dx = -4; dx <= 4; dx += 1) {
+                if (dx === 0 && dy === 0) {
+                    continue
+                }
+
+                const x = baseOne.x + dx
+                const y = baseOne.y + dy
+
+                if (x < 0 || x >= 48 || y < 0 || y >= 30) {
+                    continue
+                }
+
+                const structureId = `respawn-wide-block-${dx}-${dy}`
+                room.structures[structureId] = { ...baseOne, structureId, type: 'cover', x, y }
+            }
+        }
+
+        const respawnTile = hooks.getRespawnTile(room, playerOne)
+        expect(Math.max(Math.abs(respawnTile.x - baseOne.x), Math.abs(respawnTile.y - baseOne.y))).toBe(5)
+    })
+
     test('covers targeted combat orders, regeneration, targeting, and helper fallbacks', () => {
         const game = createGame()
         const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
@@ -849,7 +920,8 @@ describe('createGame', () => {
         room.units[blockedZunim.unitId] = blockedZunim
         room.structures['npc-block-a'] = { ...baseOne, structureId: 'npc-block-a', x: baseTwo.x - 1, y: baseTwo.y - 1 }
         room.structures['npc-block-b'] = { ...baseOne, structureId: 'npc-block-b', x: baseTwo.x - 2, y: baseTwo.y }
-        expect(hooks.processNpcActions(room, now + 2000)).toBe(false)
+        expect(hooks.processNpcActions(room, now + 2000)).toBe(true)
+        expect(blockedZunim).toMatchObject({ x: baseTwo.x, y: baseTwo.y - 1 })
 
         hooks.captureStructure(room, disabledCover, { ownerId: 'player-1' })
         expect(disabledCover.ownerId).toBe('player-1')

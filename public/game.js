@@ -1413,7 +1413,7 @@ export default function createGame(options = {}) {
                 return true
             }
 
-            return moveUnitToward(room, unit, target, 0)
+            return moveUnitToward(room, unit, target, 0, now)
         }
 
         const structure = room.structures[unit.order.structureId]
@@ -1436,17 +1436,17 @@ export default function createGame(options = {}) {
                     return attackWithUnit(room, unit, contestTarget, now)
                 }
 
-                return moveUnitToward(room, unit, contestTarget.value, unit.attackRange)
+                return moveUnitToward(room, unit, contestTarget.value, unit.attackRange, now)
             }
 
-            return moveUnitToward(room, unit, structure, CONFIG.captureRange)
+            return moveUnitToward(room, unit, structure, CONFIG.captureRange, now)
         }
 
         if (distance(unit, structure) <= unit.attackRange) {
             return attackWithUnit(room, unit, { kind: 'structure', value: structure }, now)
         }
 
-        return moveUnitToward(room, unit, structure, unit.attackRange)
+        return moveUnitToward(room, unit, structure, unit.attackRange, now)
     }
 
     function findCaptureUnitContestTarget(room, unit, structure) {
@@ -1477,22 +1477,32 @@ export default function createGame(options = {}) {
         return candidates[0] || null
     }
 
-    function moveUnitToward(room, unit, target, minDistance) {
+    function moveUnitToward(room, unit, target, minDistance, now = Date.now()) {
         if (distance(unit, target) <= minDistance) {
             return false
         }
 
         const nextTile = getStepToward(room, unit, target)
 
-        if (!nextTile) {
+        if (nextTile) {
+            unit.x = nextTile.x
+            unit.y = nextTile.y
+            syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
+
+            if (unit.type === 'capturer') {
+                resetCapturesForPlayer(room, unit.ownerId)
+            }
+
+            return true
+        }
+
+        const obstacle = getAttackableMovementObstacle(room, unit, target)
+
+        if (!obstacle) {
             return false
         }
 
-        unit.x = nextTile.x
-        unit.y = nextTile.y
-        syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
-        resetCapturesForPlayer(room, unit.ownerId)
-        return true
+        return attackMovementObstacle(room, unit, obstacle, now)
     }
 
     function attackWithUnit(room, unit, target, now) {
@@ -1786,11 +1796,7 @@ export default function createGame(options = {}) {
                 continue
             }
 
-            const nextTile = getStepToward(room, unit, targetBase)
-
-            if (nextTile) {
-                unit.x = nextTile.x
-                unit.y = nextTile.y
+            if (moveUnitToward(room, unit, targetBase, npc.attackRange, now)) {
                 changed = true
             }
         }
@@ -1926,7 +1932,7 @@ export default function createGame(options = {}) {
         addLog(room, player.gamerTag + ' perdeu o Capturador para ' + attackerName + ' e reaparece na base em ' + Math.ceil(CONFIG.respawnDelayMs / 1000) + 's.')
     }
 
-    function applyDamageToStructure(room, structure, amount, now, attackerId) {
+    function applyDamageToStructure(room, structure, amount, now, attackerId, options = {}) {
         if (structure.disabled) {
             return
         }
@@ -1945,11 +1951,43 @@ export default function createGame(options = {}) {
             return
         }
 
+        if (options.removeOnDestroyed) {
+            removeStructure(room, structure)
+            return
+        }
+
         structure.integrity = 0
         structure.barrier = 0
         structure.disabled = true
         structure.capture = null
         addLog(room, `${STRUCTURES[structure.type].label} de ${getPlayerName(room, structure.ownerId)} foi desativada.`)
+    }
+
+    function removeStructure(room, structure) {
+        const label = STRUCTURES[structure.type]?.label || 'Construcao'
+        const ownerName = getPlayerName(room, structure.ownerId)
+
+        clearOrdersForStructure(room, structure.structureId)
+        delete room.structures[structure.structureId]
+        addLog(room, `${label} de ${ownerName} foi destruida.`)
+    }
+
+    function clearOrdersForStructure(room, structureId) {
+        for (const unitId in room.units) {
+            const unit = room.units[unitId]
+
+            if (unit.order && unit.order.type === 'capture' && unit.order.structureId === structureId) {
+                unit.order = null
+            }
+        }
+
+        for (const playerId in room.players) {
+            const player = room.players[playerId]
+
+            if (player.order && player.order.type === 'capture' && player.order.structureId === structureId) {
+                player.order = null
+            }
+        }
     }
 
     function eliminatePlayer(room, playerId, attackerId) {
@@ -2065,6 +2103,34 @@ export default function createGame(options = {}) {
     }
 
     function getStepToward(room, unit, target) {
+        for (const option of getMovementOptions(unit, target)) {
+            if (!isInsideMap(option.x, option.y)) {
+                continue
+            }
+
+            const structure = getStructureAt(room, option.x, option.y)
+
+            if (structure && !structure.disabled && structure.structureId !== target.structureId) {
+                const jumpTile = getAlliedStructureJumpTile(room, unit, option, structure)
+
+                if (jumpTile) {
+                    return jumpTile
+                }
+
+                continue
+            }
+
+            if (getActorAt(room, option.x, option.y)) {
+                continue
+            }
+
+            return option
+        }
+
+        return null
+    }
+
+    function getMovementOptions(unit, target) {
         const options = []
         const dx = Math.sign(target.x - unit.x)
         const dy = Math.sign(target.y - unit.y)
@@ -2077,25 +2143,69 @@ export default function createGame(options = {}) {
             options.push({ x: unit.x + dx, y: unit.y })
         }
 
-        for (const option of options) {
-            if (!isInsideMap(option.x, option.y)) {
+        return options
+    }
+
+    function getAlliedStructureJumpTile(room, unit, blockedTile, structure) {
+        if (structure.ownerId !== unit.ownerId) {
+            return null
+        }
+
+        const dx = blockedTile.x - unit.x
+        const dy = blockedTile.y - unit.y
+        const jumpTile = { x: blockedTile.x + dx, y: blockedTile.y + dy }
+
+        if (!isInsideMap(jumpTile.x, jumpTile.y)) {
+            return null
+        }
+
+        if (getStructureAt(room, jumpTile.x, jumpTile.y) || getActorAt(room, jumpTile.x, jumpTile.y)) {
+            return null
+        }
+
+        return jumpTile
+    }
+
+    function getAttackableMovementObstacle(room, unit, target) {
+        for (const option of getMovementOptions(unit, target)) {
+            if (!isInsideMap(option.x, option.y) || getActorAt(room, option.x, option.y)) {
                 continue
             }
 
             const structure = getStructureAt(room, option.x, option.y)
 
-            if (structure && !structure.disabled && structure.structureId !== target.structureId) {
-                continue
+            if (isAttackableMovementObstacle(unit, structure, target)) {
+                return structure
             }
-
-            if (getActorAt(room, option.x, option.y)) {
-                continue
-            }
-
-            return option
         }
 
         return null
+    }
+
+    function isAttackableMovementObstacle(unit, structure, target) {
+        return Boolean(structure
+            && !structure.disabled
+            && structure.ownerId !== unit.ownerId
+            && structure.structureId !== target.structureId)
+    }
+
+    function attackMovementObstacle(room, unit, structure, now) {
+        const attackEveryMs = unit.attackEveryMs ?? NPCS[unit.type]?.attackEveryMs ?? CONFIG.tickRateMs
+
+        if (now - unit.lastAttackAt < attackEveryMs) {
+            return false
+        }
+
+        const damage = unit.damage ?? NPCS[unit.type]?.damage ?? 0
+
+        if (damage <= 0) {
+            return false
+        }
+
+        unit.lastAttackAt = now
+        applyDamageToStructure(room, structure, damage, now, unit.ownerId, { removeOnDestroyed: true })
+        syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
+        return true
     }
 
     function getCaptureCandidate(room, structure) {
@@ -2218,7 +2328,7 @@ export default function createGame(options = {}) {
             return null
         }
 
-        return getEmptyNeighbor(room, base.x, base.y) || getEmptyTileNear(room, base.x, base.y, 4)
+        return getEmptyNeighbor(room, base.x, base.y) || getEmptyTileNear(room, base.x, base.y, Math.max(SCREEN.width, SCREEN.height))
     }
 
     function getEmptyTileNear(room, x, y, maxRadius) {
