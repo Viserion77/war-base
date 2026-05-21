@@ -88,18 +88,21 @@ export function decidirComRede(rede, state, playerId) {
 }
 
 export function extrairEntradasWarBase(state, playerId) {
-    const player = state.players[playerId]
+    const players = state.players || {}
+    const structures = state.structures || {}
+    const stateUnits = state.units || {}
+    const player = players[playerId]
 
     if (!player) {
         return WAR_BASE_AI_INPUTS.map(() => 0)
     }
 
-    const base = state.structures[player.baseId]
-    const activeStructures = Object.values(state.structures || {})
+    const base = structures[player.baseId]
+    const activeStructures = Object.values(structures)
         .filter(structure => structure.ownerId === playerId && !structure.disabled)
-    const units = Object.values(state.units || {})
+    const units = Object.values(stateUnits)
         .filter(unit => unit.ownerId === playerId)
-    const aliveEnemies = Object.values(state.players || {})
+    const aliveEnemies = Object.values(players)
         .filter(candidate => candidate.playerId !== playerId && candidate.alive)
     const enemyBase = getNearestEnemyBase(state, playerId, base || player)
     const enemyDistance = enemyBase ? distance(base || player, enemyBase) : state.screen.width + state.screen.height
@@ -272,10 +275,12 @@ function criarComandoZunim(state, playerId) {
 }
 
 function getCapturableTargets(state, playerId) {
-    const player = state.players[playerId]
-    const origin = player ? state.structures[player.baseId] || player : { x: 0, y: 0 }
+    const players = state.players || {}
+    const structures = state.structures || {}
+    const player = players[playerId]
+    const origin = player ? structures[player.baseId] || player : { x: 0, y: 0 }
 
-    return Object.values(state.structures || {})
+    return Object.values(structures)
         .filter(structure => {
             const catalog = state.catalog.structures[structure.type]
             return catalog
@@ -300,15 +305,17 @@ function getCapturePriority(structure) {
 }
 
 function findBuildTile(state, playerId, structureType) {
-    const player = state.players[playerId]
-    const anchors = Object.values(state.structures || {})
+    const players = state.players || {}
+    const structures = state.structures || {}
+    const player = players[playerId]
+    const anchors = Object.values(structures)
         .filter(structure => structure.ownerId === playerId && !structure.disabled)
 
     if (!player || !anchors.length) {
         return null
     }
 
-    const enemyBase = getNearestEnemyBase(state, playerId, state.structures[player.baseId] || player)
+    const enemyBase = getNearestEnemyBase(state, playerId, structures[player.baseId] || player)
     const buildRange = state.config.buildRange
     const candidates = []
 
@@ -382,11 +389,13 @@ function getUpgradeCost(state, structure) {
 }
 
 function getNearestEnemyBase(state, playerId, origin) {
-    const bases = Object.values(state.structures || {})
+    const structures = state.structures || {}
+    const players = state.players || {}
+    const bases = Object.values(structures)
         .filter(structure => structure.type === 'base')
         .filter(structure => structure.ownerId !== playerId)
         .filter(structure => !structure.disabled)
-        .filter(structure => state.players[structure.ownerId]?.alive)
+        .filter(structure => players[structure.ownerId]?.alive)
 
     bases.sort((first, second) => distance(origin, first) - distance(origin, second))
 
@@ -394,9 +403,13 @@ function getNearestEnemyBase(state, playerId, origin) {
 }
 
 function isOccupied(state, x, y) {
-    return Object.values(state.structures || {}).some(structure => structure.x === x && structure.y === y)
-        || Object.values(state.units || {}).some(unit => unit.x === x && unit.y === y)
-        || Object.values(state.players || {}).some(player => isAvatarAvailable(player) && player.x === x && player.y === y)
+    const structures = state.structures || {}
+    const units = state.units || {}
+    const players = state.players || {}
+
+    return Object.values(structures).some(structure => structure.x === x && structure.y === y)
+        || Object.values(units).some(unit => unit.x === x && unit.y === y)
+        || Object.values(players).some(player => isAvatarAvailable(player) && player.x === x && player.y === y)
 }
 
 function isAvatarAvailable(player) {
@@ -424,4 +437,23 @@ function ratio(value, max) {
 
 function clamp01(value) {
     return Math.max(0, Math.min(1, value))
+}
+
+
+export const __agentTestables = {
+    getCapturableTargets,
+    getCapturePriority,
+    findBuildTile,
+    getBuildTileScore,
+    canBuild,
+    highestStructureLevel,
+    countStructures,
+    getUpgradeCost,
+    getNearestEnemyBase,
+    isOccupied,
+    isAvatarAvailable,
+    isInsideMap,
+    distance,
+    ratio,
+    clamp01,
 }

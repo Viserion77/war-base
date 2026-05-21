@@ -1,4 +1,5 @@
 import fs from 'fs'
+import path from 'path'
 import { fileURLToPath } from 'url'
 import RedeNeural from '../rede-neural/rede-neural.js'
 import {
@@ -6,9 +7,9 @@ import {
     WAR_BASE_AI_INPUTS,
 } from './agente-neural.js'
 
-const MODEL_PATH = fileURLToPath(new URL('./rede-treinada.json', import.meta.url))
+export const MODEL_PATH = fileURLToPath(new URL('./rede-treinada.json', import.meta.url))
 
-function criarGeradorAleatorio(seedInicial) {
+export function criarGeradorAleatorio(seedInicial) {
     let seed = seedInicial >>> 0
 
     return () => {
@@ -17,11 +18,11 @@ function criarGeradorAleatorio(seedInicial) {
     }
 }
 
-function respostaParaAcao(acao) {
+export function respostaParaAcao(acao) {
     return WAR_BASE_AI_ACTIONS.map(candidate => candidate === acao ? 1 : 0)
 }
 
-function exemplo(entradas, acao) {
+export function exemplo(entradas, acao) {
     return {
         entradas,
         saidas: respostaParaAcao(acao),
@@ -49,7 +50,7 @@ const zero = {
     aliveEnemyCount: 0.14,
 }
 
-function vetor(parcial) {
+export function vetor(parcial) {
     const entrada = {
         ...zero,
         ...parcial,
@@ -58,7 +59,7 @@ function vetor(parcial) {
     return WAR_BASE_AI_INPUTS.map(nome => entrada[nome])
 }
 
-const dataset = [
+export const dataset = [
     exemplo(vetor({ coal: 0.5, capturableTargets: 0.8, hasCaptureOrder: 0 }), 'capture'),
     exemplo(vetor({ coal: 0.5, capturableTargets: 0.8, hasCaptureOrder: 1 }), 'build-cover'),
     exemplo(vetor({ coal: 0.8, coverCount: 0, capturableTargets: 0, hasCaptureOrder: 1 }), 'build-cover'),
@@ -75,25 +76,51 @@ const dataset = [
     exemplo(vetor({ coal: 0.05, knowledge: 0.02, coverCount: 0.35, hasCaptureOrder: 1 }), 'wait'),
 ]
 
-const rede = new RedeNeural(WAR_BASE_AI_INPUTS.length, 14, WAR_BASE_AI_ACTIONS.length, {
-    taxaAprendizado: 0.18,
-    aleatorio: criarGeradorAleatorio(77311),
-})
+export function treinarRede(opcoes = {}) {
+    const rede = new RedeNeural(WAR_BASE_AI_INPUTS.length, 14, WAR_BASE_AI_ACTIONS.length, {
+        taxaAprendizado: opcoes.taxaAprendizado ?? 0.18,
+        aleatorio: opcoes.aleatorio || criarGeradorAleatorio(opcoes.seed ?? 77311),
+    })
+    const exemplos = opcoes.dataset || dataset
+    const epocas = opcoes.epocas ?? 4200
 
-for (let epoca = 0; epoca < 4200; epoca += 1) {
-    for (const item of dataset) {
-        rede.treinar(item.entradas, item.saidas)
+    for (let epoca = 0; epoca < epocas; epoca += 1) {
+        for (const item of exemplos) {
+            rede.treinar(item.entradas, item.saidas)
+        }
+    }
+
+    return rede
+}
+
+export function criarModelo(opcoes = {}) {
+    const rede = opcoes.rede || treinarRede(opcoes)
+    const exemplos = opcoes.dataset || dataset
+
+    return {
+        name: 'war-base-neural-agent',
+        trainedAt: opcoes.trainedAt || '2026-05-21T00:00:00.000Z',
+        inputs: WAR_BASE_AI_INPUTS,
+        actions: WAR_BASE_AI_ACTIONS,
+        examples: exemplos.length,
+        rede: rede.toJSON(),
     }
 }
 
-const modelo = {
-    name: 'war-base-neural-agent',
-    trainedAt: '2026-05-21T00:00:00.000Z',
-    inputs: WAR_BASE_AI_INPUTS,
-    actions: WAR_BASE_AI_ACTIONS,
-    examples: dataset.length,
-    rede: rede.toJSON(),
+export function salvarModelo(opcoes = {}) {
+    const caminhoModelo = opcoes.caminhoModelo || MODEL_PATH
+    const modelo = opcoes.modelo || criarModelo(opcoes)
+
+    fs.writeFileSync(caminhoModelo, JSON.stringify(modelo, null, 2) + '\n')
+    return caminhoModelo
 }
 
-fs.writeFileSync(MODEL_PATH, JSON.stringify(modelo, null, 2) + '\n')
-console.log(`Modelo salvo em ${MODEL_PATH}`)
+function isMainModule() {
+    return process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+}
+
+/* istanbul ignore next -- entrypoint exercised by npm run train:ai; unit tests cover the training functions. */
+if (isMainModule()) {
+    const caminhoModelo = salvarModelo()
+    console.log('Modelo salvo em ' + caminhoModelo)
+}

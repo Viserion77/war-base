@@ -2,7 +2,7 @@ export default {
     testEnvironment: 'node',
     testMatch: ['<rootDir>/tests/**/*.test.js'],
     transform: {},
-    collectCoverageFrom: ['server.js', 'public/**/*.js'],
+    collectCoverageFrom: ['server.js', 'public/**/*.js', 'ai/**/*.js'],
     coverageReporters: ['text', 'lcov'],
     coverageThreshold: {
         global: {
