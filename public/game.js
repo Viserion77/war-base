@@ -145,12 +145,13 @@ const PLAYER_COLORS = [
     '#2d6a4f',
 ]
 
-export default function createGame() {
+export default function createGame(options = {}) {
     const state = createPublicShell()
     const rooms = {}
     const playerRooms = {}
     const observers = []
     const debugObservers = []
+    const aiAgent = options.aiAgent || null
     let ticker = null
 
     function start() {
@@ -315,6 +316,54 @@ export default function createGame() {
         }
     }
 
+    function addAiPlayer(command = {}) {
+        const hostKey = normalizeHostKey(command.hostKey)
+        const room = rooms[hostKey]
+
+        if (!room) {
+            return { error: 'Sala nao encontrada.' }
+        }
+
+        if (room.winnerId) {
+            return { error: 'Partida encerrada.' }
+        }
+
+        if (Object.keys(room.players).length >= CONFIG.maxPlayersPerRoom) {
+            addLog(room, 'Sala cheia para adicionar IA.')
+            notifyRoomState(room, 'add-ai:failed')
+            return { error: 'Sala cheia.' }
+        }
+
+        const aiIndex = room.nextAiId++
+        const playerId = command.playerId || `ai-${room.hostKey}-${aiIndex}`
+
+        addPlayerToRoom(room, {
+            playerId,
+            gamerTag: command.gamerTag || `IA Neural ${aiIndex}`,
+            isAi: true,
+        })
+
+        room.aiPlayers[playerId] = {
+            playerId,
+            addedAt: Date.now(),
+            lastDecisionAt: 0,
+        }
+        room.hasHadCombatants = Object.keys(room.players).length >= 2
+        addLog(room, `${getPlayerName(room, playerId)} entrou como IA neural.`)
+        debugLog(room, 'ai:add-player', {
+            playerId,
+            requestedBy: command.requestedBy,
+            summary: summarizeRoom(room),
+        })
+        notifyRoomState(room, 'add-ai')
+
+        return {
+            hostKey: room.hostKey,
+            playerId,
+            state: getPublicState(room.hostKey),
+        }
+    }
+
     function disconnectPlayer(command) {
         const hostKey = command.hostKey || playerRooms[command.playerId]
 
@@ -442,7 +491,7 @@ export default function createGame() {
         const room = getRoomFromCommand(command)
 
         if (!room) {
-            return
+            return false
         }
 
         debugLog(room, 'action:request', {
@@ -453,14 +502,14 @@ export default function createGame() {
         if (room.winnerId) {
             addLog(room, 'A partida ja terminou.')
             notifyRoomState(room, 'action-denied')
-            return
+            return false
         }
 
         const player = room.players[command.playerId]
         if (!player || !player.alive) {
             addLog(room, 'Jogador invalido ou fora da partida.')
             notifyRoomState(room, 'action-denied')
-            return
+            return false
         }
 
         let changed = false
@@ -491,6 +540,8 @@ export default function createGame() {
 
         const reason = changed ? command.action : (command.action || 'action') + ':failed'
         notifyRoomState(room, reason)
+
+        return changed
     }
 
     function getPublicState(hostKey) {
@@ -551,12 +602,13 @@ export default function createGame() {
             ownerId: playerId,
             gamerTag,
             color,
+            isAi: Boolean(command.isAi),
             x: spawn.playerX,
             y: spawn.playerY,
             coal: CONFIG.initialCoal,
             knowledge: 0,
             alive: true,
-            connected: true,
+            connected: command.connected ?? true,
             baseId: base.structureId,
             maxIntegrity: CONFIG.playerMaxIntegrity,
             integrity: CONFIG.playerMaxIntegrity,
@@ -587,12 +639,14 @@ export default function createGame() {
             players: {},
             structures: {},
             units: {},
+            aiPlayers: {},
             logs: [],
             winnerId: null,
             tick: 0,
             hasHadCombatants: false,
             nextStructureId: 1,
             nextUnitId: 1,
+            nextAiId: 1,
             nextLogId: 1,
         }
 
@@ -1126,6 +1180,7 @@ export default function createGame() {
             return false
         }
 
+        changed = runAiPlayers(room, now) || changed
         changed = processPlayerRespawns(room, now) || changed
         changed = generateResources(room) || changed
         changed = regenerateBarriers(room, now) || changed
@@ -1134,6 +1189,64 @@ export default function createGame() {
         changed = processTowerAttacks(room, now) || changed
         changed = processNpcActions(room, now) || changed
         changed = checkVictory(room) || changed
+
+        return changed
+    }
+
+    function runAiPlayers(room, now) {
+        if (!aiAgent) {
+            return false
+        }
+
+        const decide = aiAgent.decide || aiAgent.decidir
+
+        if (typeof decide !== 'function') {
+            return false
+        }
+
+        let changed = false
+
+        for (const playerId of Object.keys(room.aiPlayers)) {
+            const memory = room.aiPlayers[playerId]
+            const player = room.players[playerId]
+
+            if (!player || !player.alive) {
+                delete room.aiPlayers[playerId]
+                continue
+            }
+
+            const cooldownMs = aiAgent.cooldownMs ?? CONFIG.tickRateMs
+
+            if (now - memory.lastDecisionAt < cooldownMs) {
+                continue
+            }
+
+            memory.lastDecisionAt = now
+
+            try {
+                const decision = decide({
+                    state: getPublicState(room.hostKey),
+                    playerId,
+                    now,
+                    memory: clone(memory),
+                })
+
+                if (!decision || !decision.action) {
+                    continue
+                }
+
+                changed = executeAction({
+                    ...decision,
+                    playerId,
+                    hostKey: room.hostKey,
+                }) || changed
+            } catch (error) {
+                debugLog(room, 'ai:error', {
+                    playerId,
+                    message: error.message,
+                })
+            }
+        }
 
         return changed
     }
@@ -1923,6 +2036,7 @@ export default function createGame() {
         stop,
         createMatch,
         joinMatch,
+        addAiPlayer,
         disconnectPlayer,
         movePlayer,
         executeAction,
@@ -1934,6 +2048,7 @@ export default function createGame() {
                 return rooms[hostKey]
             },
             tickRoom,
+            runAiPlayers,
             debugLog,
             createStructure,
             buildStructure,

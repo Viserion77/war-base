@@ -41,6 +41,21 @@ O endpoint `GET /health` retorna `status`, `activeRooms`, `uptimeSeconds` e `tim
 - O navegador lembra o último GamerTag usado para agilizar novas partidas no mesmo dispositivo.
 - Cada jogador começa com uma Base e 750 carvões.
 
+## Inteligência Artificial
+
+O jogo agora pode adicionar uma IA neural pela lista de jogadores no HUD, usando o botão **Adicionar IA**. O servidor cria um jogador interno, carrega a rede treinada salva em `ai/agente-war-base/rede-treinada.json` e, a cada tick, o agente avalia o estado público da sala para emitir ações como capturar, construir, pesquisar, fazer upgrades e enviar Zunim.
+
+A implementação fica separada em duas partes:
+
+- `ai/rede-neural/`: matriz e rede neural feedforward com backpropagation, inspirada no exemplo `redeNeural.js`.
+- `ai/agente-war-base/`: agente do War Base, script de treino e modelo treinado versionado.
+
+Para regenerar o modelo treinado:
+
+```bash
+npm run train:ai
+```
+
 ## Objetivo
 
 Proteja sua Base. Quando a integridade de uma Base chega a 0, o dono é eliminado e todas as suas estruturas/unidades saem do jogo. Quando sobra apenas um jogador com Base ativa, ele vence.
@@ -189,12 +204,15 @@ Arquivos principais:
 - `public/game.js`: estado, regras e simulação do jogo.
 - `public/render-screen.js`: renderização do canvas e HUD.
 - `public/index.html`: layout, estilos e handlers de UI.
+- `ai/rede-neural/`: implementação da rede neural.
+- `ai/agente-war-base/`: agente neural, treinamento e modelo salvo.
 
 Comandos úteis:
 
 ```bash
 npm run dev
 npm start
+npm run train:ai
 npm test
 npm run coverage
 npm run test:watch

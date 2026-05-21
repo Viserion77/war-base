@@ -8,9 +8,10 @@
     "start": "node server.js",
     "test": "npm run check && node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "dev": "nodemon --ignore logs server.js",
-    "check": "node --check server.js && node --check public/game.js && node --check public/render-screen.js && node --check public/keyboard-listener.js",
+    "check": "node --check server.js && node --check public/game.js && node --check public/render-screen.js && node --check public/keyboard-listener.js && node --check ai/rede-neural/matriz.js && node --check ai/rede-neural/rede-neural.js && node --check ai/agente-war-base/agente-neural.js && node --check ai/agente-war-base/treinar.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "coverage": "npm run check && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
+    "coverage": "npm run check && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "train:ai": "node ai/agente-war-base/treinar.js"
   },
   "repository": {
     "type": "git",

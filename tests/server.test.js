@@ -44,6 +44,7 @@ function createFakeGame() {
         getHostKeyForPlayer: jest.fn(() => 'ABCDE'),
         movePlayer: jest.fn(),
         executeAction: jest.fn(),
+        addAiPlayer: jest.fn(() => ({ hostKey: 'ABCDE', playerId: 'ai-1', state: { ok: true } })),
         disconnectPlayer: jest.fn(),
         getRoomCount: jest.fn(() => 0),
     }
@@ -217,6 +218,7 @@ describe('server infrastructure', () => {
         socket.handlers['join-match']({ gamerTag: 'Bob', hostKey: 'missing' })
         socket.handlers['move-player']({ keyPressed: 'w' })
         socket.handlers['game-action']({ action: 'build' })
+        socket.handlers['add-ai']()
         socket.handlers.disconnect()
 
         expect(game.createMatch).toHaveBeenCalledWith({ playerId: 'socket-1', gamerTag: 'Alice' })
@@ -226,6 +228,7 @@ describe('server infrastructure', () => {
         expect(socket.emit).toHaveBeenCalledWith('join-error', { error: 'Sala nao encontrada.' })
         expect(game.movePlayer).toHaveBeenCalledWith({ playerId: 'socket-1', hostKey: 'ABCDE', keyPressed: 'w' })
         expect(game.executeAction).toHaveBeenCalledWith({ action: 'build', playerId: 'socket-1', hostKey: 'ABCDE' })
+        expect(game.addAiPlayer).toHaveBeenCalledWith({ hostKey: 'ABCDE', requestedBy: 'socket-1', gamerTag: undefined })
         expect(game.disconnectPlayer).toHaveBeenCalledWith({ playerId: 'socket-1' })
         expect(appendRoomLog).toHaveBeenCalledWith('MISSING', 'socket:join-match:error', {
             playerId: 'socket-1',
@@ -233,6 +236,44 @@ describe('server infrastructure', () => {
         })
     })
 
+
+    test('emits add-ai errors back to the requester', () => {
+        const game = createFakeGame()
+        game.addAiPlayer = jest.fn(() => ({ error: 'Sala cheia.' }))
+        const socket = createFakeSocket()
+        const appendRoomLog = jest.fn()
+        const logger = { log: jest.fn() }
+
+        registerSocketHandlers(socket, game, appendRoomLog, logger)
+        socket.handlers['add-ai']({ hostKey: 'edcba', gamerTag: 'Bot' })
+
+        expect(game.addAiPlayer).toHaveBeenCalledWith({ hostKey: 'EDCBA', requestedBy: 'socket-1', gamerTag: 'Bot' })
+        expect(socket.emit).toHaveBeenCalledWith('add-ai-error', { error: 'Sala cheia.' })
+        expect(appendRoomLog).toHaveBeenCalledWith('EDCBA', 'socket:add-ai:error', {
+            playerId: 'socket-1',
+            error: 'Sala cheia.',
+        })
+    })
+
+    test('creates a default game with an injected AI agent when no game adapter is provided', () => {
+        jest.useFakeTimers()
+        try {
+            const sockets = createFakeSockets()
+            const aiAgent = { cooldownMs: 1000, decide: jest.fn(() => null) }
+            const warBaseServer = createWarBaseServer({
+                port: 0,
+                aiAgent,
+                logsDirectory: fs.mkdtempSync(path.join(os.tmpdir(), 'war-base-server-')),
+                createSockets: () => sockets,
+            })
+
+            warBaseServer.sockets.close(() => {})
+            warBaseServer.game.stop()
+            expect(warBaseServer.game).toHaveProperty('addAiPlayer')
+        } finally {
+            jest.useRealTimers()
+        }
+    })
 
     test('shuts down cleanly before the HTTP server starts listening', () => {
         jest.useFakeTimers()

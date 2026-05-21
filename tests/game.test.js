@@ -876,4 +876,115 @@ describe('createGame', () => {
     })
 
 
+
+    test('adds an AI player and lets the injected neural agent issue a capture order', () => {
+        const game = createGame({
+            aiAgent: {
+                cooldownMs: 1000,
+                decide: jest.fn(({ state, playerId }) => {
+                    const target = Object.values(state.structures)
+                        .find(structure => structure.type === 'cover' && structure.ownerId === null)
+
+                    return {
+                        action: 'capture',
+                        structureId: target.structureId,
+                        checkedPlayerId: playerId,
+                    }
+                }),
+            },
+        })
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice', connected: false })
+        const result = game.addAiPlayer({ hostKey: match.hostKey, gamerTag: 'Bot Neural', requestedBy: 'player-1' })
+        const room = game.__testing.getRoom(match.hostKey)
+
+        expect(result.error).toBeUndefined()
+        expect(result.playerId).toBe('ai-' + match.hostKey + '-1')
+        expect(result.state.players[result.playerId]).toMatchObject({
+            gamerTag: 'Bot Neural',
+            isAi: true,
+            connected: true,
+            alive: true,
+        })
+        expect(game.getPublicState(match.hostKey).players['player-1'].connected).toBe(false)
+        expect(game.getHostKeyForPlayer(result.playerId)).toBe(match.hostKey)
+        expect(game.__testing.runAiPlayers(room, 10000)).toBe(true)
+        expect(game.__testing.runAiPlayers(room, 10001)).toBe(false)
+        expect(game.getPublicState(match.hostKey).players[result.playerId].order).toMatchObject({ type: 'capture' })
+        expect(game.__testing.getRoom(match.hostKey).hasHadCombatants).toBe(true)
+    })
+
+    test('handles AI add denials and defensive agent branches', () => {
+        const game = createGame()
+        expect(game.addAiPlayer()).toEqual({ error: 'Sala nao encontrada.' })
+        expect(game.addAiPlayer({ hostKey: 'missing' })).toEqual({ error: 'Sala nao encontrada.' })
+
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const room = game.__testing.getRoom(match.hostKey)
+        expect(game.__testing.runAiPlayers(room, Date.now())).toBe(false)
+
+        room.winnerId = 'player-1'
+        expect(game.addAiPlayer({ hostKey: match.hostKey })).toEqual({ error: 'Partida encerrada.' })
+        room.winnerId = null
+
+        for (let index = 2; index <= 8; index += 1) {
+            game.joinMatch({ playerId: 'player-' + index, gamerTag: 'Player ' + index, hostKey: match.hostKey })
+        }
+        expect(game.addAiPlayer({ hostKey: match.hostKey })).toEqual({ error: 'Sala cheia.' })
+
+        const missingDecideGame = createGame({ aiAgent: {} })
+        const missingDecideMatch = missingDecideGame.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        missingDecideGame.addAiPlayer({ hostKey: missingDecideMatch.hostKey })
+        expect(missingDecideGame.__testing.runAiPlayers(missingDecideGame.__testing.getRoom(missingDecideMatch.hostKey), 10000)).toBe(false)
+
+        const nullDecisionAgent = { cooldownMs: 0, decidir: jest.fn(() => null) }
+        const nullDecisionGame = createGame({ aiAgent: nullDecisionAgent })
+        const nullDecisionMatch = nullDecisionGame.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const nullAi = nullDecisionGame.addAiPlayer({ hostKey: nullDecisionMatch.hostKey })
+        expect(nullDecisionGame.__testing.runAiPlayers(nullDecisionGame.__testing.getRoom(nullDecisionMatch.hostKey), 10000)).toBe(false)
+        expect(nullDecisionAgent.decidir).toHaveBeenCalledWith(expect.objectContaining({ playerId: nullAi.playerId }))
+
+        const emptyDecisionGame = createGame({ aiAgent: { cooldownMs: 0, decide: jest.fn(() => ({})) } })
+        const emptyDecisionMatch = emptyDecisionGame.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        emptyDecisionGame.addAiPlayer({ hostKey: emptyDecisionMatch.hostKey })
+        expect(emptyDecisionGame.__testing.runAiPlayers(emptyDecisionGame.__testing.getRoom(emptyDecisionMatch.hostKey), 10000)).toBe(false)
+
+        const deadAgent = { cooldownMs: 0, decide: jest.fn(() => ({ action: 'capture', structureId: 'missing' })) }
+        const deadGame = createGame({ aiAgent: deadAgent })
+        const deadMatch = deadGame.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const deadAi = deadGame.addAiPlayer({ hostKey: deadMatch.hostKey, playerId: 'bot-fixed' })
+        const deadRoom = deadGame.__testing.getRoom(deadMatch.hostKey)
+        deadRoom.players[deadAi.playerId].alive = false
+        expect(deadGame.__testing.runAiPlayers(deadRoom, 10000)).toBe(false)
+        expect(deadRoom.aiPlayers[deadAi.playerId]).toBeUndefined()
+        expect(deadAgent.decide).not.toHaveBeenCalled()
+
+        const mixedAgent = {
+            decide: jest.fn(({ state, playerId }) => {
+                if (playerId.endsWith('-1')) {
+                    const target = Object.values(state.structures).find(structure => structure.type === 'cover' && structure.ownerId === null)
+                    return { action: 'capture', structureId: target.structureId }
+                }
+
+                return { action: 'dance' }
+            }),
+        }
+        const mixedGame = createGame({ aiAgent: mixedAgent })
+        const mixedMatch = mixedGame.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        mixedGame.addAiPlayer({ hostKey: mixedMatch.hostKey })
+        mixedGame.addAiPlayer({ hostKey: mixedMatch.hostKey })
+        expect(mixedGame.__testing.runAiPlayers(mixedGame.__testing.getRoom(mixedMatch.hostKey), 10000)).toBe(true)
+
+        const throwingGame = createGame({ aiAgent: { cooldownMs: 0, decide: jest.fn(() => { throw new Error('boom') }) } })
+        const debugEntries = []
+        throwingGame.subscribeDebug(entry => debugEntries.push(entry))
+        const throwingMatch = throwingGame.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const throwingAi = throwingGame.addAiPlayer({ hostKey: throwingMatch.hostKey })
+        expect(throwingAi.state.players[throwingAi.playerId].gamerTag).toBe('IA Neural 1')
+        expect(throwingGame.__testing.runAiPlayers(throwingGame.__testing.getRoom(throwingMatch.hostKey), 10000)).toBe(false)
+        expect(debugEntries).toEqual(expect.arrayContaining([
+            expect.objectContaining({ event: 'ai:error' }),
+        ]))
+    })
+
+
 })

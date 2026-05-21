@@ -5,6 +5,7 @@ import express from 'express'
 import http from 'http'
 import { Server } from 'socket.io'
 import createGame from './public/game.js'
+import { createNeuralWarBaseAgent } from './ai/agente-war-base/agente-neural.js'
 
 export const DEFAULT_PORT = process.env.PORT || 4000
 
@@ -14,7 +15,9 @@ export function createWarBaseServer(options = {}) {
     const exit = options.exit || process.exit
     const shutdownTimeoutMs = options.shutdownTimeoutMs || 5000
     const logsDirectory = options.logsDirectory || path.join(process.cwd(), 'logs', 'rooms')
-    const game = options.game || createGame()
+    const game = options.game || createGame({
+        aiAgent: options.aiAgent || createNeuralWarBaseAgent(options.aiOptions),
+    })
     const createSockets = options.createSockets || (httpServer => new Server(httpServer))
     const app = express()
     const server = http.createServer(app)
@@ -197,6 +200,34 @@ export function registerSocketHandlers(socket, game, appendRoomLog, logger = con
             ...command,
             playerId,
             hostKey,
+        })
+    })
+
+    socket.on('add-ai', (command = {}) => {
+        const hostKey = normalizeHostKey(command.hostKey || game.getHostKeyForPlayer(playerId))
+        appendRoomLog(hostKey, 'socket:add-ai', {
+            playerId,
+            command,
+        })
+
+        const result = game.addAiPlayer({
+            hostKey,
+            requestedBy: playerId,
+            gamerTag: command.gamerTag,
+        })
+
+        if (result.error) {
+            appendRoomLog(hostKey, 'socket:add-ai:error', {
+                playerId,
+                error: result.error,
+            })
+            socket.emit('add-ai-error', result)
+            return
+        }
+
+        appendRoomLog(result.hostKey, 'socket:add-ai:success', {
+            playerId,
+            aiPlayerId: result.playerId,
         })
     })
 

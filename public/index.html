@@ -806,6 +806,12 @@
                     structureId: button.dataset.structureId,
                 })
             }
+
+            if (action === 'add-ai') {
+                socket.emit('add-ai', {
+                    hostKey: game.state.hostKey,
+                })
+            }
         })
 
         function handleKeyboardShortcut(event) {

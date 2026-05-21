@@ -457,7 +457,7 @@ function updateHud(hud, game, currentPlayerId, uiState) {
         <section class="panel">
             <div class="panel-title">Jogadores</div>
             <div class="players-list">${playersList(game, currentPlayerId)}</div>
-            ${addAiButton()}
+            ${addAiButton(game)}
         </section>
         <section class="panel log-panel">
             <div class="panel-title">Eventos</div>
@@ -572,8 +572,28 @@ function npcButton(game, player, npcType) {
     return `<button class="action-button" type="button" data-action="spawn-npc" data-npc="${npcType}" aria-label="Enviar ${escapeHtml(label)}${cost ? ' por' + cost + ' carvoes' : ''}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
 }
 
-function addAiButton() {
-    return '<button class="action-button add-ai-button" type="button" data-action="add-ai" title="IA em desenvolvimento." aria-label="Adicionar uma IA em desenvolvimento" disabled>Adicionar uma IA</button>'
+function addAiButton(game) {
+    const disabledReason = getAddAiDisabledReason(game)
+    const enabled = !disabledReason
+    const title = disabledReason || 'Adicionar uma IA neural a esta sala.'
+
+    return '<button class="action-button add-ai-button" type="button" data-action="add-ai" title="' + escapeHtml(title) + '" aria-label="Adicionar uma IA neural" ' + (enabled ? '' : 'disabled') + '>Adicionar IA</button>'
+}
+
+function getAddAiDisabledReason(game) {
+    if (!game.state.hostKey) {
+        return 'Entre em uma sala primeiro.'
+    }
+
+    if (game.state.winnerId) {
+        return 'Partida encerrada.'
+    }
+
+    if (Object.keys(game.state.players || {}).length >= game.state.config.maxPlayersPerRoom) {
+        return 'Sala cheia.'
+    }
+
+    return ''
 }
 
 function getSpawnNpcDisabledReason(game, player, npcType) {
@@ -700,7 +720,7 @@ function playersList(game, currentPlayerId) {
             || (first.joinedAt || 0) - (second.joinedAt || 0)
             || first.gamerTag.localeCompare(second.gamerTag))
         .map(player => {
-            const status = player.connected === false ? 'offline' : playerStatusLabel(player)
+            const status = player.isAi ? 'IA' : player.connected === false ? 'offline' : playerStatusLabel(player)
 
             return `
                 <div class="player-row ${player.playerId === currentPlayerId ? 'current' : ''} ${player.connected === false ? 'offline' : ''}">
@@ -1029,6 +1049,7 @@ export const __renderTestables = {
     getResearchDisabledReason,
     npcButton,
     addAiButton,
+    getAddAiDisabledReason,
     getSpawnNpcDisabledReason,
     selectedPanel,
     getUpgradeDisabledReason,

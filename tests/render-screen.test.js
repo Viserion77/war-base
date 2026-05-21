@@ -37,7 +37,7 @@ function createCanvas(context) {
 
 function createGameState() {
     const screen = { width: 12, height: 8, pixelsPerFields: 10 }
-    const config = { buildRange: 6, captureRange: 2, captureDurationMs: 30000 }
+    const config = { buildRange: 6, captureRange: 2, captureDurationMs: 30000, maxPlayersPerRoom: 8 }
     const players = {
         p1: {
             playerId: 'p1',
@@ -193,9 +193,9 @@ describe('render-screen', () => {
         expect(hud.innerHTML).toContain('Sala ABCDE')
         expect(hud.innerHTML).toContain('Vencedor: &lt;Alice&gt;')
         expect(hud.innerHTML).toContain('Capturando Cover')
-        expect(hud.innerHTML).toContain('Adicionar uma IA')
-        expect(hud.innerHTML).toContain('data-action="add-ai" title="IA em desenvolvimento."')
-        expect(hud.innerHTML).toContain('aria-label="Adicionar uma IA em desenvolvimento" disabled')
+        expect(hud.innerHTML).toContain('Adicionar IA')
+        expect(hud.innerHTML).toContain('data-action="add-ai" title="Partida encerrada."')
+        expect(hud.innerHTML).toContain('aria-label="Adicionar uma IA neural" disabled')
         expect(hud.innerHTML).toContain('&lt;evento&gt;')
         expect(hud.innerHTML).toContain('Estruturas')
         expect(hud.innerHTML).toContain('Unidades')
@@ -243,6 +243,15 @@ describe('render-screen', () => {
         expect(__renderTestables.getResearchDisabledReason(game, player, 'per')).toBe('Conhecimento insuficiente: precisa de 15.')
         player.knowledge = 100
         expect(__renderTestables.getResearchDisabledReason(game, player, 'per')).toBe('')
+
+        expect(__renderTestables.addAiButton({ state: { ...game.state, winnerId: null } })).not.toContain('disabled')
+        expect(__renderTestables.getAddAiDisabledReason({ state: { ...game.state, hostKey: null } })).toBe('Entre em uma sala primeiro.')
+        expect(__renderTestables.getAddAiDisabledReason({ state: { ...game.state, winnerId: null, players: undefined } })).toBe('')
+        expect(__renderTestables.getAddAiDisabledReason(game)).toBe('Partida encerrada.')
+        const fullGame = createGameState()
+        fullGame.state.winnerId = null
+        fullGame.state.config.maxPlayersPerRoom = 3
+        expect(__renderTestables.getAddAiDisabledReason(fullGame)).toBe('Sala cheia.')
 
         expect(__renderTestables.getSpawnNpcDisabledReason({ state: { catalog: { npcs: {} }, structures: {} } }, player, 'missing')).toBe('NPC indisponivel.')
         expect(__renderTestables.getSpawnNpcDisabledReason(game, null, 'zunim')).toBe('Jogador fora da partida.')
@@ -347,6 +356,8 @@ describe('render-screen', () => {
         expect(__renderTestables.getActorAt(game.state, 2, 2)).toBe(game.state.players.p1)
         game.state.players.p2.connected = false
         expect(__renderTestables.playersList(game, 'p1')).toContain('offline')
+        game.state.players.ai = { ...game.state.players.p2, playerId: 'ai', gamerTag: 'Bot', isAi: true, connected: true, alive: true }
+        expect(__renderTestables.playersList(game, 'p1')).toContain('<small>IA</small>')
         expect(__renderTestables.playerStatusLabel({ alive: true, activeCaptureUnitId: null, avatarDeployed: false })).toBe('pronta')
     })
 
