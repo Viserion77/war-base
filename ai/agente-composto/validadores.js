@@ -2,10 +2,6 @@
 const BUILD_LIMIT_TYPES = ['mine', 'library', 'archer', 'catapult', 'barracks']
 
 export function createCommandForAction(action, state, playerId, options = {}) {
-    if (action === 'capture') {
-        return createCaptureCommand(state, playerId, options.heatmap)
-    }
-
     if (action === 'build-mine') {
         return createBuildCommand(state, playerId, 'mine', options.heatmap)
     }
@@ -50,35 +46,7 @@ export function createCommandForAction(action, state, playerId, options = {}) {
         return createSoldierCommand(state, playerId)
     }
 
-    if (action === 'scout') {
-        return createScoutCommand(state, playerId, options.heatmap)
-    }
-
     return null
-}
-
-export function createCaptureCommand(state, playerId, heatmap = null, filter = {}) {
-    const player = state.players?.[playerId]
-
-    if (!player || player.order?.type === 'capture' || player.respawnAt || !player.alive) {
-        return null
-    }
-
-    const targets = getCapturableTargets(state, playerId)
-        .filter(target => !filter.type || target.type === filter.type)
-
-    if (!targets.length) {
-        return null
-    }
-
-    targets.sort((first, second) => getHeatmapScore(heatmap, second) - getHeatmapScore(heatmap, first)
-        || getCapturePriority(first) - getCapturePriority(second)
-        || distance(getPlayerOrigin(state, playerId), first) - distance(getPlayerOrigin(state, playerId), second))
-
-    return {
-        action: 'capture',
-        structureId: targets[0].structureId,
-    }
 }
 
 export function createBuildCommand(state, playerId, structureType, heatmap = null) {
@@ -175,56 +143,6 @@ export function createSoldierCommand(state, playerId) {
         action: 'spawn-npc',
         npcType: 'soldier',
     }
-}
-
-export function createScoutCommand(state, playerId, heatmap = null) {
-    const player = state.players?.[playerId]
-
-    if (!player || !player.alive || player.respawnAt) {
-        return null
-    }
-
-    const tile = getScoutTiles(state, playerId, heatmap)[0]
-
-    if (!tile) {
-        return null
-    }
-
-    return {
-        action: 'move-herald-to',
-        x: tile.x,
-        y: tile.y,
-    }
-}
-
-export function getCapturableTargets(state, playerId) {
-    const visibleTargets = Object.values(state.structures || {})
-        .filter(structure => isCapturableStructure(state, structure, playerId))
-    const rememberedTargets = Object.values(state.memory?.structures || {})
-        .filter(structure => !state.structures?.[structure.structureId])
-        .filter(structure => isCapturableStructure(state, structure, playerId))
-
-    return [...visibleTargets, ...rememberedTargets]
-}
-
-export function isCapturableStructure(state, structure, playerId) {
-    const catalog = state.catalog?.structures?.[structure.type]
-    return Boolean(catalog
-        && catalog.captureable
-        && structure.ownerId !== playerId
-        && (structure.disabled || structure.ownerId))
-}
-
-export function getCapturePriority(structure) {
-    if (!structure.ownerId && structure.disabled) {
-        return 0
-    }
-
-    if (structure.disabled) {
-        return 1
-    }
-
-    return 2
 }
 
 export function findBuildTile(state, playerId, structureType, heatmap = null) {
@@ -416,31 +334,6 @@ export function getHeatmapScore(heatmap, tile) {
     return Number(heatmap[tile.y * width + tile.x]) || 0
 }
 
-export function getScoutTiles(state, playerId = Object.keys(state.players || {})[0], heatmap = null) {
-    const width = state.screen?.width || 48
-    const height = state.screen?.height || 30
-    const tiles = []
-
-    for (let y = 0; y < height; y += 1) {
-        for (let x = 0; x < width; x += 1) {
-            tiles.push({
-                x,
-                y,
-                fogged: Array.isArray(state.fogMask) ? !state.fogMask[y]?.[x] : false,
-                heat: getHeatmapScore(heatmap, { x, y }),
-            })
-        }
-    }
-
-    const origin = getPlayerOrigin(state, playerId)
-
-    tiles.sort((first, second) => Number(second.fogged) - Number(first.fogged)
-        || second.heat - first.heat
-        || distance(origin, second) - distance(origin, first))
-
-    return tiles
-}
-
 export function rankByScores(labels, scores) {
     return labels
         .map((label, index) => ({ label, score: Number(scores?.[index]) || 0 }))
@@ -455,9 +348,6 @@ export function distance(first, second) {
 }
 
 export const __validadoresTestables = {
-    getCapturableTargets,
-    isCapturableStructure,
-    getCapturePriority,
     getBuildCandidates,
     getBuildTileScore,
     canBuild,
@@ -473,7 +363,6 @@ export const __validadoresTestables = {
     isAvatarAvailable,
     isInsideMap,
     getHeatmapScore,
-    getScoutTiles,
     rankByScores,
     distance,
 }

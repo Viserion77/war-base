@@ -10,12 +10,14 @@ O fluxo principal e:
 
 1. O servidor adiciona um jogador interno controlado por IA.
 2. O agente composto monta o input com 3 frames do tabuleiro espectral e 32 escalares.
-3. A rede `router` escolhe a macro-acao: `farm`, `capture`, `research`, `defend`, `attack`, `upgrade`, `upgrade-castle`, `scout` ou `wait`.
-4. A sub-rede da macro-acao decide o detalhe: alvo, tile de construcao, pesquisa ou spawn.
+3. A rede `router` escolhe a macro-acao: `farm`, `research`, `defend`, `attack`, `upgrade`, `upgrade-castle` ou `wait`.
+4. A sub-rede da macro-acao decide o detalhe: tile de construcao, pesquisa ou spawn.
 5. Os validadores deterministicos conferem recursos, requisitos, alcance e ocupacao do mapa.
 6. A primeira decisao valida vira um comando do jogo.
 
 Quando os arquivos treinados em `ai/agente-composto/redes/` ainda nao existem, o agente usa uma fallback heuristica simples para continuar funcional sem ressuscitar o agente antigo.
+
+Captura, exploracao e movimentacao das tropas nao sao mais decididas pela rede: o motor do jogo controla o Herald e os soldados de forma autonoma (ver "Unidades Autonomas").
 
 ## Fog Of War
 
@@ -37,18 +39,19 @@ O tamanho final do input padrao e `4352` floats. A rede compartilhada de placeme
 Arquitetura principal:
 
 - `router`: escolhe a macro-acao.
-- `farm`: decide entre construir Cover, construir Taraque ou capturar Cover.
-- `capture`: escolhe um alvo capturavel no mapa visivel/memorizado.
+- `farm`: decide entre construir Cover ou construir Taraque.
 - `research`: escolhe Per, Hef ou Tujai.
 - `defend`: decide torre defensiva ou upgrade defensivo.
 - `attack`: decide Tujai, Zunim ou torre avancada.
 - `upgrade`: escolhe estrutura propria nao-castelo para evoluir quando houver teto liberado.
 - `upgrade-castle`: prioriza a Castelo quando slots de construcao estao cheios.
-- `scout`: escolhe tile para mover o Capturador.
 - `placement`: heatmap compartilhado para tiles de construcao.
-- `target-*`: heatmaps especializados para alvos.
+- `target-defend-upgrade`: heatmap especializado para alvo de upgrade defensivo.
+- `target-upgrade`: heatmap especializado para alvo de upgrade da Castelo.
 
 Todas usam a infraestrutura feedforward em `ai/rede-neural/`.
+
+As redes `scout`, `capture`, `target-capture` e a macro `farm > capture-mine-target` foram removidas: captura passou a ser decidida pelo motor, nao mais pela rede.
 
 ## Validadores Deterministicos
 
@@ -56,9 +59,35 @@ A camada em `ai/agente-composto/validadores.js` continua essencial. Ela impede c
 
 - construcoes precisam de carvao, requisitos liberados, tile livre, alcance de construcao e slot disponivel em `catalog.limits`;
 - pesquisas precisam de conhecimento e nivel minimo de Taraque;
-- upgrades so podem mirar estruturas proprias ativas com carvao suficiente; estruturas nao-castelo tambem precisam estar abaixo do nivel da Castelo; o upgrade da Castelo depende da media de niveis das outras estruturas alcancar `nivelAtual * 0.75`;
-- capturas so miram estruturas capturaveis visiveis ou lembradas;
-- scout usa `move-herald-to` para explorar tiles sob fog.
+- upgrades so podem mirar estruturas proprias ativas com carvao suficiente; estruturas nao-castelo tambem precisam estar abaixo do nivel da Castelo; o upgrade da Castelo depende da media de niveis das outras estruturas alcancar `nivelAtual * 0.75`.
+
+Os comandos `capture` e `move-herald-to` nao existem mais: a captura e movimentacao do Herald sao controladas pelo motor.
+
+## Unidades Autonomas
+
+Captura e ataque sao tratados como comportamentos do motor, nao decisoes da rede. O ciclo do servidor passa por um loop dedicado para cada tropa antes de processar comandos da IA.
+
+### Herald
+
+Cada jogador tem exatamente um Herald, spawnado ao entrar no jogo e respawnado no castelo quando morre. A cada tick:
+
+1. **Se ja existe ordem ativa** (`move` ou `capture`), continua executando ate concluir.
+2. **Procura alvo capturavel**: visivel ou em `memory.structures`. Se houver algum, gera ordem `capture` mirando o **mais proximo do proprio castelo**.
+3. **Patrulha do FOV**: senao, gera ordem `move` para um tile na **borda da fogMask aliada** (tile visivel cujos vizinhos incluem ao menos um tile sob fog). A escolha gira pelos quadrantes ao redor do castelo para distribuir a exploracao.
+
+O Herald nao precisa mais ser comandado por humano nem por IA. Os antigos comandos `capture` e `move-herald-to` foram removidos do protocolo, dos botoes e das teclas.
+
+### Soldados
+
+Cada soldado, a cada tick, segue prioridades em cascata:
+
+1. **Defesa do FOV aliado**: se existe estrutura ou unidade inimiga dentro da `fogMask` do dono (combinacao dos `sightRange` do castelo, torres, soldados e Herald), o soldado mira o inimigo **mais proximo do proprio castelo** e o ataca.
+2. **Apoio ao Herald**:
+   - Se o Herald tem ordem `capture` ou `move`, o soldado avanca para o **destino da ordem** (acelera capturas e protege o Herald em rota).
+   - Se o Herald esta idle, o soldado **escolta** posicionando-se proximo a ele.
+3. **Exploracao**: se nada acima se aplica, o soldado escolhe um tile sob fog (dispersao por hash do `unitId` para evitar amontoamento) e marcha para descobrir o mapa.
+
+Isso substitui o antigo comportamento de marchar direto no castelo inimigo mais proximo, que ignorava ameacas imediatas e nao apoiava nem a exploracao nem a captura.
 
 ## Treinamento
 

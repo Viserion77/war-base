@@ -783,9 +783,9 @@
                                 <div><dt>W</dt><dd data-i18n="help.commandW">Evoluir a construcao selecionada.</dd></div>
                                 <div><dt>A</dt><dd data-i18n="help.commandA">Construir Mina no terreno selecionado.</dd></div>
                                 <div><dt>S</dt><dd data-i18n="help.commandS">Enviar Soldado quando o Quartel estiver ativo.</dd></div>
-                                <div><dt>D</dt><dd data-i18n="help.commandD">Iniciar captura do alvo ou focar o Castelo.</dd></div>
-                                <div><dt>Clique</dt><dd data-i18n="help.commandClick">Selecionar terreno ou construcao capturavel.</dd></div>
-                                <div><dt>Botoes</dt><dd data-i18n="help.commandButtons">Construir, pesquisar, evoluir, capturar e enviar unidade.</dd></div>
+                                <div><dt>D</dt><dd data-i18n="help.commandD">Focar o Castelo no mapa.</dd></div>
+                                <div><dt>Clique</dt><dd data-i18n="help.commandClick">Selecionar terreno ou construcao.</dd></div>
+                                <div><dt>Botoes</dt><dd data-i18n="help.commandButtons">Construir, pesquisar, evoluir e enviar unidade.</dd></div>
                                 <div><dt>HostKey</dt><dd data-i18n="help.commandHostKey">Codigo para outros jogadores entrarem na sala.</dd></div>
                             </dl>
                         </div>
@@ -996,13 +996,6 @@
                 })
             }
 
-            if (action === 'capture') {
-                socket.emit('game-action', {
-                    action: 'capture',
-                    structureId: button.dataset.structureId,
-                })
-            }
-
             if (action === 'toggle-autoplay') {
                 socket.emit('game-action', {
                     action: 'toggle-autoplay',
@@ -1113,8 +1106,6 @@
             if (reason === 'upgrade') return 'shieldClang'
             if (reason === 'research') return 'researchDone'
             if (reason === 'spawn-npc') return 'shieldClang'
-            if (reason === 'capture') return 'shieldClang'
-            if (reason === 'move-herald-to') return 'shieldClang'
             return null
         }
 
@@ -1221,7 +1212,7 @@
             }
 
             if (key === 'd') {
-                captureSelectedStructureOrFocusCastle()
+                focusOwnCastle()
             }
         }
 
@@ -1258,21 +1249,6 @@
                 action: 'spawn-npc',
                 npcType: 'soldier',
             })
-        }
-
-        function captureSelectedStructureOrFocusCastle() {
-            const structure = uiState.selectedStructureId ? game.state.structures[uiState.selectedStructureId] : null
-            const catalog = structure ? game.state.catalog.structures[structure.type] : null
-
-            if (structure && catalog && catalog.captureable) {
-                socket.emit('game-action', {
-                    action: 'capture',
-                    structureId: structure.structureId,
-                })
-                return
-            }
-
-            focusOwnCastle()
         }
 
         function focusOwnCastle() {

@@ -1104,12 +1104,6 @@ function selectedPanel(game, player, selectedStructure, uiState) {
     const upgradeDisabledReason = getUpgradeDisabledReason(player, selectedStructure, upgradeCost, castle ? castle.level : 0, castleUpgradeGate)
     const canUpgrade = !upgradeDisabledReason
     const title = upgradeDisabledReason ? ` title="${escapeHtml(upgradeDisabledReason)}"` : ''
-    const captureDisabledReason = getCaptureDisabledReason(game, player, selectedStructure)
-    const captureTitle = captureDisabledReason ? ' title="' + escapeHtml(captureDisabledReason) + '"' : ''
-    const canCapture = !captureDisabledReason
-    const captureButton = catalog.captureable
-        ? '<button class="action-button" type="button" data-action="capture" data-structure-id="' + selectedStructure.structureId + '" aria-label="' + escapeHtml(t('action.startCaptureAria', { name: label })) + '"' + captureTitle + ' ' + (canCapture ? '' : 'disabled') + '>' + escapeHtml(t('action.startCapture')) + '</button>'
-        : ''
     const orderStatus = player.order && player.order.type === 'capture' && player.order.structureId === selectedStructure.structureId
         ? '<span class="tile-status tile-status-available">' + escapeHtml(t('hud.captureOrderActive')) + '</span>'
         : ''
@@ -1121,7 +1115,6 @@ function selectedPanel(game, player, selectedStructure, uiState) {
                 <span>${escapeHtml(ownerName)}</span>
                 <span class="tile-status tile-status-blocked">${escapeHtml(t('hud.lastSeen'))}</span>
                 ${orderStatus}
-                ${captureButton}
             </div>
         `
     }
@@ -1134,7 +1127,6 @@ function selectedPanel(game, player, selectedStructure, uiState) {
             <span>${formatNumber(Math.max(0, Math.ceil(selectedStructure.barrier)))}/${formatNumber(selectedStructure.maxBarrier)} ${t('hud.barrier')}</span>
             ${orderStatus}
             <button class="action-button" type="button" data-action="upgrade" data-structure-id="${selectedStructure.structureId}" aria-label="${escapeHtml(t('action.upgradeAria', { name: label, cost: upgradeCost }))}"${title} ${canUpgrade ? '' : 'disabled'}>${escapeHtml(t('action.upgrade'))} ${upgradeCost}</button>
-            ${captureButton}
         </div>
     `
 }
@@ -1166,40 +1158,6 @@ function getUpgradeDisabledReason(player, structure, cost, castleLevel = 0, cast
 
     if (player.gold < cost) {
         return t('error.notEnoughGold', { cost })
-    }
-
-    return ''
-}
-
-function getCaptureDisabledReason(game, player, structure) {
-    const catalog = game.state.catalog.structures[structure.type]
-
-    if (!catalog || !catalog.captureable) {
-        return t('error.notCapturable')
-    }
-
-    if (!player || !player.alive) {
-        return t('error.playerOut')
-    }
-
-    if (player.autoplay) {
-        return t('error.autoplayOn')
-    }
-
-    if (player.respawnAt) {
-        return t('error.respawnIn', { seconds: getRespawnRemainingSeconds(player) })
-    }
-
-    if (structure.ownerId === player.playerId && !structure.disabled) {
-        return t('error.alreadyOwned')
-    }
-
-    if (structure.ownerId === player.playerId && structure.disabled) {
-        return t('error.ownDisabled')
-    }
-
-    if (player.order && player.order.type === 'capture' && player.order.structureId === structure.structureId) {
-        return t('error.captureOrderActive')
     }
 
     return ''
@@ -1624,7 +1582,6 @@ export const __renderTestables = {
     getSpawnNpcDisabledReason,
     selectedPanel,
     getUpgradeDisabledReason,
-    getCaptureDisabledReason,
     playersList,
     logsList,
     getBuildDisabledReason,

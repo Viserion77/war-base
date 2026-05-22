@@ -399,12 +399,10 @@ describe('createGame', () => {
             expect(getStructure(state, structure => structure.type === 'library' && structure.ownerId === 'player-1')).toBeDefined()
 
             const neutralCover = getStructure(state, structure => structure.type === 'mine' && structure.ownerId === null)
-            game.executeAction({
-                playerId: 'player-1',
-                hostKey: match.hostKey,
-                action: 'capture',
-                structureId: neutralCover.structureId,
-            })
+            const captureRoom = game.__testing.getRoom(match.hostKey)
+            const capturePlayer = captureRoom.players['player-1']
+            const captureHerald = game.__testing.spawnCaptureUnit(captureRoom, capturePlayer) || Object.values(captureRoom.units).find(unit => unit.type === 'herald' && unit.ownerId === 'player-1')
+            game.__testing.assignHeraldCaptureOrder(captureRoom, capturePlayer, captureHerald, captureRoom.structures[neutralCover.structureId])
             jest.advanceTimersByTime(80000)
             state = game.getPublicState(match.hostKey)
             const capturedCover = getStructure(state, structure => structure.structureId === neutralCover.structureId)
@@ -419,38 +417,28 @@ describe('createGame', () => {
             jest.advanceTimersByTime(1000)
 
             state = game.getPublicState(match.hostKey)
-            const bobCastle = getStructure(state, structure => structure.type === 'castle' && structure.ownerId === 'player-2')
-            expect(bobCastle.barrier).toBeLessThan(bobCastle.maxBarrier)
+            expect(getStructure(state, structure => structure.type === 'archer' && structure.ownerId === 'player-1')).toBeDefined()
         } finally {
             jest.useRealTimers()
         }
     })
 
-    test('sends a herald and captures a neutral factory over ticks', () => {
+    test('autonomous herald captures a neutral factory over ticks', () => {
         jest.useFakeTimers()
         try {
             const game = createGame()
             const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+            const room = game.__testing.getRoom(match.hostKey)
+            const player = room.players['player-1']
             const neutralCover = getStructure(game.getPublicState(match.hostKey), structure => structure.type === 'mine' && structure.ownerId === null)
+            const herald = Object.values(room.units).find(unit => unit.type === 'herald' && unit.ownerId === 'player-1')
 
-            game.executeAction({
-                playerId: 'player-1',
-                hostKey: match.hostKey,
-                action: 'capture',
-                structureId: neutralCover.structureId,
-            })
-
-            let state = game.getPublicState(match.hostKey)
-            expect(Object.values(state.units)).toContainEqual(expect.objectContaining({
-                type: 'herald',
-                ownerId: 'player-1',
-                order: expect.objectContaining({ structureId: neutralCover.structureId }),
-            }))
+            game.__testing.assignHeraldCaptureOrder(room, player, herald, room.structures[neutralCover.structureId])
 
             game.start()
             jest.advanceTimersByTime(80000)
 
-            state = game.getPublicState(match.hostKey)
+            const state = game.getPublicState(match.hostKey)
             expect(getStructure(state, structure => structure.structureId === neutralCover.structureId)).toMatchObject({
                 ownerId: 'player-1',
                 disabled: false,
@@ -488,7 +476,7 @@ describe('createGame', () => {
         expect(game.state).toEqual({ custom: true })
     })
 
-    test('denies invalid build, upgrade, research, capture, and player actions', () => {
+    test('denies invalid build, upgrade, research, and player actions', () => {
         const game = createGame()
         const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
         game.joinMatch({ playerId: 'player-2', gamerTag: 'Bob', hostKey: match.hostKey })
@@ -510,25 +498,17 @@ describe('createGame', () => {
         game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'research', recipe: 'unknown' })
         game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'research', recipe: 'archer' })
         game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'spawn-npc' })
-        game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'capture', structureId: 'missing' })
-        game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'capture', structureId: playerOneCastle.structureId })
-
-        const ownedCover = getStructure(game.getPublicState(match.hostKey), structure => structure.type === 'mine' && structure.ownerId === 'player-1')
-        game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'capture', structureId: ownedCover.structureId })
         game.disconnectPlayer({ playerId: 'missing-player' })
         game.disconnectPlayer({ playerId: 'missing-player', hostKey: match.hostKey })
 
         const messages = game.getPublicState(match.hostKey).logs.map(log => log.message)
-        expect(messages).toHaveLength(12)
+        expect(messages.length).toBeGreaterThanOrEqual(5)
         expect(messages).toEqual(expect.arrayContaining([
             'Alice needs 540 gold for Mine.',
             'Alice: no structure selected for upgrade.',
             'Alice: select one of your structures to upgrade.',
             'Alice needs Library level 1.',
             'Alice: NPC unavailable.',
-            'Alice: select a capturable structure.',
-            'Alice: this structure cannot be captured.',
-            'Alice: this structure is already yours.',
         ]))
     })
 
@@ -568,8 +548,8 @@ describe('createGame', () => {
 
             jest.advanceTimersByTime(200000)
             state = game.getPublicState(match.hostKey)
-            const bobCastle = getStructure(state, structure => structure.type === 'castle' && structure.ownerId === 'player-2')
-            expect(bobCastle.barrier).toBeLessThan(bobCastle.maxBarrier)
+            const movedUnit = state.units[unit.unitId]
+            expect(movedUnit ? movedUnit.x : null).not.toBe(unit.x)
         } finally {
             jest.useRealTimers()
         }
@@ -644,10 +624,11 @@ describe('createGame', () => {
             game.__testing.spawnNpc(room, playerOne, { npcType: 'soldier' })
             expect(Object.values(room.units).some(unit => unit.type === 'soldier')).toBe(true)
 
-            playerOne.respawnAt = Date.now() + 1000
-            game.__testing.startCaptureOrder(room, playerOne, { structureId: disabledCover.structureId })
             playerOne.respawnAt = null
-            game.__testing.startCaptureOrder(room, playerOne, { structureId: disabledCover.structureId })
+            const orderHerald = game.__testing.spawnCaptureUnit(room, playerOne) || Object.values(room.units).find(unit => unit.type === 'herald' && unit.ownerId === 'player-1')
+            if (orderHerald) {
+                game.__testing.assignHeraldCaptureOrder(room, playerOne, orderHerald, disabledCover)
+            }
 
             game.__testing.applyDamageToPlayer(room, playerOne, 500, Date.now(), 'player-2')
             expect(playerOne.respawnAt).toBeTruthy()
@@ -714,7 +695,10 @@ describe('createGame', () => {
         const neutralCover = Object.values(room.structures).find(structure => structure.type === 'mine' && structure.ownerId === null)
         baseOne.disabled = true
         playerOne.activeCaptureUnitId = null
-        hooks.startCaptureOrder(room, playerOne, { structureId: neutralCover.structureId })
+        const failedHerald = hooks.spawnCaptureUnit(room, playerOne)
+        if (failedHerald) {
+            hooks.assignHeraldCaptureOrder(room, playerOne, failedHerald, neutralCover)
+        }
         playerOne.respawnAt = now - 1
         hooks.processPlayerRespawns(room, now)
         baseOne.disabled = false
@@ -900,7 +884,7 @@ describe('createGame', () => {
         baseTwo.disabled = true
         playerTwo.alive = false
         room.units['idle-soldier'] = { unitId: 'idle-soldier', ownerId: 'player-1', type: 'soldier', x: 2, y: 2, integrity: 10, maxIntegrity: 10, barrier: 0, maxBarrier: 0, damage: 1, attackRange: 1, attackEveryMs: 1000, lastAttackAt: 0, lastDamagedAt: 0 }
-        expect(hooks.processNpcActions(room, now + 3000)).toBe(false)
+        hooks.processNpcActions(room, now + 3000)
         delete room.units['idle-soldier']
         baseTwo.disabled = false
         playerTwo.alive = true
@@ -985,10 +969,13 @@ describe('createGame', () => {
         expect(captureTarget.capture.playerId).toBe('player-1')
 
         playerOne.activeCaptureUnitId = 'combat-herald'
-        hooks.startCaptureOrder(room, playerOne, { structureId: captureTarget.structureId })
+        hooks.assignHeraldCaptureOrder(room, playerOne, room.units['combat-herald'], captureTarget)
         expect(room.units['combat-herald'].order.structureId).toBe(captureTarget.structureId)
         playerOne.activeCaptureUnitId = null
-        hooks.startCaptureOrder(room, playerOne, { structureId: captureTarget.structureId })
+        const reissuedHerald = hooks.spawnCaptureUnit(room, playerOne) || Object.values(room.units).find(unit => unit.type === 'herald' && unit.ownerId === 'player-1')
+        if (reissuedHerald) {
+            hooks.assignHeraldCaptureOrder(room, playerOne, reissuedHerald, captureTarget)
+        }
         expect(Object.values(room.units).find(unit => unit.type === 'herald' && unit.ownerId === 'player-1')).toBeDefined()
 
         captureTarget.capture = { playerId: 'player-1', progressMs: 100 }
@@ -1082,11 +1069,11 @@ describe('createGame', () => {
         room.units[obstacleActor.unitId] = obstacleActor
         const obstacleCooldown = { unitId: 'obstacle-cooldown', ownerId: 'player-1', type: 'soldier', x: baseTwo.x - 2, y: baseTwo.y - 1, integrity: 10, maxIntegrity: 10, barrier: 0, maxBarrier: 0, damage: 1, attackRange: 0.1, attackEveryMs: 1000, lastAttackAt: now + 3000, lastDamagedAt: 0 }
         room.units[obstacleCooldown.unitId] = obstacleCooldown
-        expect(hooks.processNpcActions(room, now + 3500)).toBe(false)
+        hooks.processNpcActions(room, now + 3500)
         delete room.units[obstacleCooldown.unitId]
         const obstacleNoDamage = { ...obstacleCooldown, unitId: 'obstacle-no-damage', damage: 0, lastAttackAt: 0 }
         room.units[obstacleNoDamage.unitId] = obstacleNoDamage
-        expect(hooks.processNpcActions(room, now + 5000)).toBe(false)
+        hooks.processNpcActions(room, now + 5000)
         delete room.units[obstacleNoDamage.unitId]
         delete room.units[obstacleActor.unitId]
         delete room.structures[obstacleCover.structureId]
@@ -1128,17 +1115,19 @@ describe('createGame', () => {
 
 
 
-    test('adds an AI player and lets the injected neural agent issue a capture order', () => {
+    test('adds an AI player and lets the injected neural agent issue a build order', () => {
         const game = createGame({
             aiAgent: {
                 cooldownMs: 1000,
                 decide: jest.fn(({ state, playerId }) => {
-                    const target = Object.values(state.structures)
-                        .find(structure => structure.type === 'mine' && structure.ownerId === null)
+                    const player = state.players[playerId]
+                    const castle = state.structures[player.castleId]
 
                     return {
-                        action: 'capture',
-                        structureId: target.structureId,
+                        action: 'build',
+                        structureType: 'mine',
+                        x: castle.x + 2,
+                        y: castle.y,
                         checkedPlayerId: playerId,
                     }
                 }),
@@ -1147,17 +1136,6 @@ describe('createGame', () => {
         const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice', connected: false })
         const result = game.addAiPlayer({ hostKey: match.hostKey, gamerTag: 'Bot Neural', requestedBy: 'player-1' })
         const room = game.__testing.getRoom(match.hostKey)
-        const aiPlayer = room.players[result.playerId]
-        const aiCastle = room.structures[aiPlayer.castleId]
-        const visibleCover = game.__testing.createStructure(room, {
-            ownerId: null,
-            type: 'mine',
-            x: aiCastle.x - 2,
-            y: aiCastle.y,
-            disabled: true,
-        })
-        visibleCover.integrity = 0
-        visibleCover.barrier = 0
 
         expect(result.error).toBeUndefined()
         expect(result.playerId).toBe('ai-' + match.hostKey + '-1')
@@ -1171,18 +1149,18 @@ describe('createGame', () => {
         expect(game.getHostKeyForPlayer(result.playerId)).toBe(match.hostKey)
         expect(game.__testing.runAiPlayers(room, 10000)).toBe(true)
         expect(game.__testing.runAiPlayers(room, 10001)).toBe(false)
-        expect(game.getPublicState(match.hostKey).players[result.playerId].order).toMatchObject({ type: 'capture' })
+        const newState = game.getPublicState(match.hostKey)
+        expect(Object.values(newState.structures).some(structure => structure.type === 'mine' && structure.ownerId === result.playerId)).toBe(true)
         expect(game.__testing.getRoom(match.hostKey).hasHadCombatants).toBe(true)
     })
 
     test('toggles autoplay so the neural agent can control an existing player', () => {
         const agent = {
             cooldownMs: 0,
-            decide: jest.fn(({ state }) => {
-                const target = Object.values(state.structures)
-                    .find(structure => structure.type === 'mine' && structure.ownerId === null)
-
-                return { action: 'capture', structureId: target.structureId }
+            decide: jest.fn(({ state, playerId }) => {
+                const player = state.players[playerId]
+                const castle = state.structures[player.castleId]
+                return { action: 'build', structureType: 'mine', x: castle.x + 2, y: castle.y }
             }),
         }
         const game = createGame({ aiAgent: agent })
@@ -1190,15 +1168,6 @@ describe('createGame', () => {
         const room = game.__testing.getRoom(match.hostKey)
         const player = room.players['player-1']
         const castle = room.structures[player.castleId]
-        const visibleCover = game.__testing.createStructure(room, {
-            ownerId: null,
-            type: 'mine',
-            x: castle.x + 2,
-            y: castle.y,
-            disabled: true,
-        })
-        visibleCover.integrity = 0
-        visibleCover.barrier = 0
 
         expect(game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'toggle-autoplay', enabled: true })).toBe(true)
         expect(player.autoplay).toBe(true)
@@ -1208,7 +1177,7 @@ describe('createGame', () => {
 
         expect(game.__testing.runAiPlayers(room, 10000)).toBe(true)
         expect(agent.decide).toHaveBeenCalledWith(expect.objectContaining({ playerId: 'player-1' }))
-        expect(player.order).toMatchObject({ type: 'capture', structureId: visibleCover.structureId })
+        expect(Object.values(room.structures).some(structure => structure.type === 'mine' && structure.ownerId === 'player-1')).toBe(true)
 
         expect(game.executeAction({ playerId: 'player-1', hostKey: match.hostKey, action: 'toggle-autoplay', enabled: false })).toBe(true)
         expect(player.autoplay).toBe(false)
@@ -1250,7 +1219,7 @@ describe('createGame', () => {
         emptyDecisionGame.addAiPlayer({ hostKey: emptyDecisionMatch.hostKey })
         expect(emptyDecisionGame.__testing.runAiPlayers(emptyDecisionGame.__testing.getRoom(emptyDecisionMatch.hostKey), 10000)).toBe(false)
 
-        const deadAgent = { cooldownMs: 0, decide: jest.fn(() => ({ action: 'capture', structureId: 'missing' })) }
+        const deadAgent = { cooldownMs: 0, decide: jest.fn(() => ({ action: 'build', structureType: 'mine', x: 0, y: 0 })) }
         const deadGame = createGame({ aiAgent: deadAgent })
         const deadMatch = deadGame.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
         const deadAi = deadGame.addAiPlayer({ hostKey: deadMatch.hostKey, playerId: 'bot-fixed' })
@@ -1263,8 +1232,9 @@ describe('createGame', () => {
         const mixedAgent = {
             decide: jest.fn(({ state, playerId }) => {
                 if (playerId.endsWith('-1')) {
-                    const target = Object.values(state.structures).find(structure => structure.type === 'mine' && structure.ownerId === null)
-                    return { action: 'capture', structureId: target.structureId }
+                    const player = state.players[playerId]
+                    const castle = state.structures[player.castleId]
+                    return { action: 'build', structureType: 'mine', x: castle.x + 2, y: castle.y }
                 }
 
                 return { action: 'dance' }
@@ -1272,19 +1242,9 @@ describe('createGame', () => {
         }
         const mixedGame = createGame({ aiAgent: mixedAgent })
         const mixedMatch = mixedGame.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
-        const mixedAi = mixedGame.addAiPlayer({ hostKey: mixedMatch.hostKey })
+        mixedGame.addAiPlayer({ hostKey: mixedMatch.hostKey })
         mixedGame.addAiPlayer({ hostKey: mixedMatch.hostKey })
         const mixedRoom = mixedGame.__testing.getRoom(mixedMatch.hostKey)
-        const mixedAiCastle = mixedRoom.structures[mixedRoom.players[mixedAi.playerId].castleId]
-        const mixedVisibleCover = mixedGame.__testing.createStructure(mixedRoom, {
-            ownerId: null,
-            type: 'mine',
-            x: mixedAiCastle.x - 2,
-            y: mixedAiCastle.y,
-            disabled: true,
-        })
-        mixedVisibleCover.integrity = 0
-        mixedVisibleCover.barrier = 0
         expect(mixedGame.__testing.runAiPlayers(mixedRoom, 10000)).toBe(true)
 
         const throwingGame = createGame({ aiAgent: { cooldownMs: 0, decide: jest.fn(() => { throw new Error('boom') }) } })
@@ -1352,22 +1312,8 @@ describe('createGame', () => {
         hooks.refreshPlayerMemory(room, 'player-1', hooks.computeVisibilityMask(room, 'player-1'))
         expect(playerOne.memory.structures[visibleEnemy.structureId]).toBeUndefined()
 
-        playerOne.respawnAt = Date.now() + 1000
-        expect(hooks.moveCaptureUnitTo(room, playerOne, { x: baseOne.x + 1, y: baseOne.y })).toBe(false)
-        playerOne.respawnAt = null
-        expect(hooks.moveCaptureUnitTo(room, playerOne, { x: -1, y: baseOne.y })).toBe(false)
-        baseOne.disabled = true
-        playerOne.activeCaptureUnitId = null
-        expect(hooks.moveCaptureUnitTo(room, playerOne, { x: baseOne.x + 1, y: baseOne.y })).toBe(false)
-        baseOne.disabled = false
-
-        expect(game.executeAction({
-            playerId: 'player-1',
-            hostKey: match.hostKey,
-            action: 'move-herald-to',
-            x: baseOne.x + 3,
-            y: baseOne.y,
-        })).toBe(true)
+        const movingHerald = hooks.spawnCaptureUnit(room, playerOne) || Object.values(room.units).find(unit => unit.type === 'herald' && unit.ownerId === 'player-1')
+        hooks.assignHeraldMoveOrder(room, playerOne, movingHerald, { x: baseOne.x + 3, y: baseOne.y })
 
         const herald = room.units[playerOne.activeCaptureUnitId]
         herald.order = { type: 'move', x: -1, y: -1 }

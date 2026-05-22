@@ -32,15 +32,12 @@ import {
 } from '../ai/agente-composto/agente-composto.js'
 import {
     __validadoresTestables,
-    createCaptureCommand,
     createBuildCommand,
     createCommandForAction,
     createResearchCommand,
-    createScoutCommand,
     createUpgradeCommand,
     createSoldierCommand,
     findBuildTile,
-    getCapturableTargets,
     rankByScores,
 } from '../ai/agente-composto/validadores.js'
 
@@ -160,14 +157,11 @@ function createNetworks({ macro = 'farm', farm = 'build-mine', research = 'arche
     return {
         router: scoreByLabel(MACRO_ACTIONS, macro),
         farm: scoreByLabel(FARM_ACTIONS, farm),
-        capture: heatAt(10, 10),
         research: scoreByLabel(RESEARCH_ACTIONS, research),
         defend: scoreByLabel(DEFEND_ACTIONS, defend),
         attack: scoreByLabel(ATTACK_ACTIONS, attack),
         upgrade: heatAt(4, 4),
-        scout: heatAt(30, 20),
         placement: heatAt(6, 5),
-        'target-capture': heatAt(10, 10),
         'target-defend-upgrade': heatAt(6, 4),
         'target-upgrade': heatAt(4, 4),
     }
@@ -230,24 +224,16 @@ describe('AI composite modules', () => {
         const state = createAiState()
         const hooks = __validadoresTestables
 
-        expect(getCapturableTargets(state, 'p1').map(target => target.structureId)).toEqual(expect.arrayContaining(['mine-neutral', 'mine-enemy-disabled', 'mine-enemy-active']))
-        expect(createCaptureCommand(state, 'p1')).toEqual({ action: 'capture', structureId: 'mine-neutral' })
-        expect(createCaptureCommand({ ...state, players: { ...state.players, p1: { ...state.players.p1, order: { type: 'capture' } } } }, 'p1')).toBeNull()
         expect(createBuildCommand(state, 'p1', 'mine')).toMatchObject({ action: 'build', structureType: 'mine' })
         expect(createBuildCommand({ ...state, players: { ...state.players, p1: { ...state.players.p1, gold: 0 } } }, 'p1', 'mine')).toBeNull()
         expect(createUpgradeCommand(state, 'p1')).toEqual({ action: 'upgrade', structureId: 'castle-1' })
         expect(createUpgradeCommand(state, 'p1', null, ['castle'])).toEqual({ action: 'upgrade', structureId: 'castle-1' })
         expect(createResearchCommand({ ...state, players: { ...state.players, p1: { ...state.players.p1, unlocked: { ...state.players.p1.unlocked, archer: false } } } }, 'p1', 'archer')).toEqual({ action: 'research', recipe: 'archer' })
         expect(createSoldierCommand(state, 'p1')).toEqual({ action: 'spawn-npc', npcType: 'soldier' })
-        state.fogMask[20][30] = false
-        expect(createScoutCommand(state, 'p1')).toMatchObject({ action: 'move-herald-to' })
         expect(createCommandForAction('wait', state, 'p1')).toBeNull()
         expect(createCommandForAction('build-catapult', state, 'p1')).toMatchObject({ structureType: 'catapult' })
         expect(findBuildTile({ ...state, structures: {}, players: {} }, 'p1', 'mine')).toBeNull()
 
-        expect(hooks.getCapturePriority({ ownerId: null, disabled: true })).toBe(0)
-        expect(hooks.getCapturePriority({ ownerId: 'p2', disabled: true })).toBe(1)
-        expect(hooks.getCapturePriority({ ownerId: 'p2', disabled: false })).toBe(2)
         expect(hooks.canBuild(state, state.players.p1, 'custom')).toBe(true)
         expect(hooks.canBuild(state, state.players.p1, 'missing')).toBe(false)
         expect(hooks.canBuild({ ...state, catalog: { ...state.catalog, limits: { ...state.catalog.limits, mine: { current: 5, max: 5 } } } }, state.players.p1, 'mine')).toBe(false)
@@ -282,13 +268,11 @@ describe('AI composite modules', () => {
         expect(buildCommandFromMacro('farm', networks, input, state, 'p1')).toMatchObject({ action: 'build', structureType: 'mine' })
         expect(decideWithNetworks(networks, state, 'p1', { frameBuffer })).toMatchObject({ action: 'build', aiDecision: { policy: 'farm' } })
 
-        expect(buildCommandFromMacro('capture', createNetworks({ macro: 'capture' }), input, state, 'p1')).toMatchObject({ action: 'capture' })
         expect(buildCommandFromMacro('research', createNetworks({ macro: 'research', research: 'archer' }), input, { ...state, players: { ...state.players, p1: { ...state.players.p1, unlocked: { ...state.players.p1.unlocked, archer: false } } } }, 'p1')).toEqual({ action: 'research', recipe: 'archer' })
         expect(buildCommandFromMacro('defend', createNetworks({ macro: 'defend', defend: 'upgrade-defensive' }), input, state, 'p1')).toMatchObject({ action: 'upgrade' })
         expect(buildCommandFromMacro('attack', createNetworks({ macro: 'attack', attack: 'spawn-soldier' }), input, state, 'p1')).toEqual({ action: 'spawn-npc', npcType: 'soldier' })
         expect(buildCommandFromMacro('upgrade', createNetworks({ macro: 'upgrade' }), input, state, 'p1')).toMatchObject({ action: 'upgrade' })
         expect(buildCommandFromMacro('upgrade-castle', createNetworks({ macro: 'upgrade-castle' }), input, state, 'p1')).toEqual({ action: 'upgrade', structureId: 'castle-1' })
-        expect(buildCommandFromMacro('scout', createNetworks({ macro: 'scout' }), input, state, 'p1')).toMatchObject({ action: 'move-herald-to' })
         expect(buildCommandFromMacro('wait', networks, input, state, 'p1')).toBeNull()
     })
 
@@ -300,7 +284,7 @@ describe('AI composite modules', () => {
 
         expect(createZeroNetwork(3).predict()).toEqual([0, 0, 0])
         expect(loadCompositeNetwork('router', tmpDir).predict(new Array(COMPOSITE_INPUT_SIZE).fill(0))).toHaveLength(MACRO_ACTIONS.length)
-        expect(loadCompositeNetwork('farm', tmpDir).predict()).toEqual([0, 0, 0])
+        expect(loadCompositeNetwork('farm', tmpDir).predict()).toEqual(new Array(FARM_ACTIONS.length).fill(0))
         expect(Object.keys(loadCompositeNetworks(tmpDir))).toContain('router')
 
         const agent = createCompositeWarBaseAgent({ networks: createNetworks({ macro: 'farm' }), cooldownMs: 0, heuristicFallback: false })

@@ -622,10 +622,6 @@ export default function createGame(options = {}) {
             changed = researchRecipe(room, player, command)
         } else if (command.action === 'spawn-npc') {
             changed = spawnNpc(room, player, command)
-        } else if (command.action === 'capture') {
-            changed = startCaptureOrder(room, player, command)
-        } else if (command.action === 'move-herald-to') {
-            changed = moveCaptureUnitTo(room, player, command)
         } else {
             handled = false
             addLog(room, player.gamerTag + ': unknown action: ' + (command.action || 'empty') + '.')
@@ -1015,7 +1011,10 @@ export default function createGame(options = {}) {
             lastAttackAt: 0,
             lastDamagedAt: 0,
             joinedAt: now,
+            patrolAngle: 0,
         }
+
+        spawnCaptureUnit(room, room.players[playerId])
     }
 
     function createRoom(hostKey) {
@@ -1359,95 +1358,44 @@ function getNpcName(type) {
     }
 
 
-    function moveCaptureUnitTo(room, player, command) {
-        if (!isPlayerCommandable(player)) {
-            addLog(room, player.gamerTag + ': wait for respawn before moving the Herald.')
-            return false
-        }
-
-        if (!Number.isInteger(command.x) || !Number.isInteger(command.y) || !isInsideMap(command.x, command.y)) {
-            addLog(room, player.gamerTag + ': invalid Herald destination.')
-            return false
-        }
-
-        const captureUnit = getPlayerCaptureUnit(room, player) || spawnCaptureUnit(room, player)
-
-        if (!captureUnit) {
-            addLog(room, player.gamerTag + ': no free space near the Castle to move the Herald.')
-            return false
-        }
-
+    function assignHeraldMoveOrder(room, player, unit, target) {
         const order = {
             type: 'move',
-            x: command.x,
-            y: command.y,
-            unitId: captureUnit.unitId,
+            x: target.x,
+            y: target.y,
+            unitId: unit.unitId,
             createdAt: Date.now(),
         }
 
-        captureUnit.order = order
+        unit.order = order
         player.order = order
-        player.activeCaptureUnitId = captureUnit.unitId
-        syncPlayerToCaptureUnit(player, captureUnit)
+        player.activeCaptureUnitId = unit.unitId
+        syncPlayerToCaptureUnit(player, unit)
         resetCapturesForPlayer(room, player.playerId)
-        addLog(room, player.gamerTag + ' moved the Herald to scout.')
-        return true
     }
 
-    function startCaptureOrder(room, player, command) {
-        const structure = room.structures[command.structureId]
-
-        if (!structure) {
-            addLog(room, player.gamerTag + ': select a capturable structure.')
-            return false
-        }
-
-        const catalog = STRUCTURES[structure.type]
-
-        if (!catalog || !catalog.captureable) {
-            addLog(room, player.gamerTag + ': this structure cannot be captured.')
-            return false
-        }
-
-        if (!isPlayerCommandable(player)) {
-            addLog(room, player.gamerTag + ': wait for respawn before starting capture.')
-            return false
-        }
-
-        if (structure.ownerId === player.playerId && !structure.disabled) {
-            addLog(room, player.gamerTag + ': this structure is already yours.')
-            return false
-        }
-
-        if (structure.ownerId === player.playerId && structure.disabled) {
-            addLog(room, player.gamerTag + ': your structure is disabled.')
-            return false
-        }
-
-        const captureUnit = getPlayerCaptureUnit(room, player) || spawnCaptureUnit(room, player)
-
-        if (!captureUnit) {
-            addLog(room, player.gamerTag + ': no free space near the Castle to send the Herald.')
-            return false
-        }
-
+    function assignHeraldCaptureOrder(room, player, unit, structure) {
         const order = {
             type: 'capture',
             structureId: structure.structureId,
-            unitId: captureUnit.unitId,
+            unitId: unit.unitId,
             createdAt: Date.now(),
         }
 
-        captureUnit.order = order
+        unit.order = order
         player.order = order
-        player.activeCaptureUnitId = captureUnit.unitId
-        syncPlayerToCaptureUnit(player, captureUnit)
+        player.activeCaptureUnitId = unit.unitId
+        syncPlayerToCaptureUnit(player, unit)
         resetCapturesForPlayer(room, player.playerId)
-        addLog(room, player.gamerTag + ' sent a Herald to ' + getStructureName(structure.type) + '.')
-        return true
     }
 
     function spawnCaptureUnit(room, player) {
+        const existing = getPlayerCaptureUnit(room, player)
+
+        if (existing) {
+            return existing
+        }
+
         const spawnTile = getRespawnTile(room, player)
 
         if (!spawnTile) {
@@ -1512,6 +1460,154 @@ function getNpcName(type) {
         }
 
         return changed
+    }
+
+    function processHeraldAutonomy(room) {
+        let changed = false
+
+        for (const playerId of Object.keys(room.players)) {
+            const player = room.players[playerId]
+
+            if (!player.alive || player.respawnAt) {
+                continue
+            }
+
+            const herald = getPlayerCaptureUnit(room, player)
+
+            if (!herald || herald.order) {
+                continue
+            }
+
+            const captureTarget = findCapturableForHerald(room, playerId)
+
+            if (captureTarget) {
+                assignHeraldCaptureOrder(room, player, herald, captureTarget)
+                changed = true
+                continue
+            }
+
+            const patrolTile = pickHeraldPatrolTile(room, player, herald)
+
+            if (patrolTile) {
+                assignHeraldMoveOrder(room, player, herald, patrolTile)
+                changed = true
+            }
+        }
+
+        return changed
+    }
+
+    function findCapturableForHerald(room, playerId) {
+        const player = room.players[playerId]
+        const castle = player ? room.structures[player.castleId] : null
+
+        if (!castle) {
+            return null
+        }
+
+        const fogMask = computeVisibilityMask(room, playerId)
+        const memory = player.memory?.structures || {}
+
+        const visible = Object.values(room.structures)
+            .filter(structure => isHeraldCapturable(structure, playerId))
+            .filter(structure => isTileVisible(fogMask, structure.x, structure.y))
+
+        const remembered = Object.values(memory)
+            .filter(remembered => !room.structures[remembered.structureId])
+            .filter(structure => isHeraldCapturable(structure, playerId))
+
+        const candidates = [...visible, ...remembered]
+
+        if (!candidates.length) {
+            return null
+        }
+
+        candidates.sort((first, second) => distance(castle, first) - distance(castle, second))
+
+        return candidates[0]
+    }
+
+    function isHeraldCapturable(structure, playerId) {
+        const catalog = STRUCTURES[structure.type]
+        return Boolean(catalog && catalog.captureable
+            && structure.ownerId !== playerId
+            && (structure.disabled || structure.ownerId))
+    }
+
+    function pickHeraldPatrolTile(room, player, herald) {
+        const fogMask = computeVisibilityMask(room, player.playerId)
+        const borderTiles = getFogBorderTiles(fogMask)
+        const origin = room.structures[player.castleId] || herald
+        const patrolAngle = typeof player.patrolAngle === 'number' ? player.patrolAngle : 0
+
+        player.patrolAngle = (patrolAngle + Math.PI / 3) % (Math.PI * 2)
+
+        if (!borderTiles.length) {
+            return getFallbackPatrolTile(origin)
+        }
+
+        borderTiles.sort((first, second) => angleDelta(origin, first, patrolAngle) - angleDelta(origin, second, patrolAngle)
+            || distance(herald, second) - distance(herald, first))
+
+        return borderTiles[0]
+    }
+
+    function getFogBorderTiles(fogMask) {
+        const tiles = []
+
+        for (let y = 0; y < SCREEN.height; y += 1) {
+            for (let x = 0; x < SCREEN.width; x += 1) {
+                if (!isTileVisible(fogMask, x, y)) {
+                    continue
+                }
+
+                if (hasFoggedNeighbor(fogMask, x, y)) {
+                    tiles.push({ x, y })
+                }
+            }
+        }
+
+        return tiles
+    }
+
+    function hasFoggedNeighbor(fogMask, x, y) {
+        for (let dy = -1; dy <= 1; dy += 1) {
+            for (let dx = -1; dx <= 1; dx += 1) {
+                if (dx === 0 && dy === 0) {
+                    continue
+                }
+
+                const nx = x + dx
+                const ny = y + dy
+
+                if (!isInsideMap(nx, ny)) {
+                    continue
+                }
+
+                if (!isTileVisible(fogMask, nx, ny)) {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    function angleDelta(origin, tile, targetAngle) {
+        const angle = Math.atan2(tile.y - origin.y, tile.x - origin.x)
+        const diff = Math.abs(((angle - targetAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI)
+        return diff
+    }
+
+    function getFallbackPatrolTile(origin) {
+        const centerX = Math.floor(SCREEN.width / 2)
+        const centerY = Math.floor(SCREEN.height / 2)
+
+        if (origin && origin.x === centerX && origin.y === centerY) {
+            return { x: centerX, y: centerY }
+        }
+
+        return { x: centerX, y: centerY }
     }
 
     function processCaptureUnitOrders(room, now) {
@@ -1685,6 +1781,7 @@ function getNpcName(type) {
         changed = processPlayerRespawns(room, now) || changed
         changed = generateResources(room) || changed
         changed = regenerateBarriers(room, now) || changed
+        changed = processHeraldAutonomy(room) || changed
         changed = processCaptureUnitOrders(room, now) || changed
         changed = processCaptures(room) || changed
         changed = processTowerAttacks(room, now) || changed
@@ -1908,6 +2005,7 @@ function getNpcName(type) {
 
     function processNpcActions(room, now) {
         let changed = false
+        const fogMasks = {}
 
         for (const unitId in room.units) {
             const unit = room.units[unitId]
@@ -1923,31 +2021,147 @@ function getNpcName(type) {
                 continue
             }
 
-            const targetCastle = getNearestEnemyCastle(room, unit.ownerId, unit.x, unit.y)
-
-            if (!targetCastle) {
-                continue
+            if (!fogMasks[unit.ownerId]) {
+                fogMasks[unit.ownerId] = computeVisibilityMask(room, unit.ownerId)
             }
 
+            const fogMask = fogMasks[unit.ownerId]
             const npc = NPCS[unit.type]
-            const distanceToTarget = distance(unit, targetCastle)
+            const target = pickSoldierTarget(room, unit, owner, fogMask)
 
-            if (distanceToTarget <= npc.attackRange) {
-                if (now - unit.lastAttackAt >= npc.attackEveryMs) {
-                    unit.lastAttackAt = now
-                    applyDamage(room, { kind: 'structure', value: targetCastle }, unit.damage, now, unit.ownerId)
-                    changed = true
-                }
-
+            if (!target) {
                 continue
             }
 
-            if (moveUnitToward(room, unit, targetCastle, npc.attackRange, now)) {
-                changed = true
-            }
+            changed = executeSoldierAction(room, unit, npc, target, now) || changed
         }
 
         return changed
+    }
+
+    function pickSoldierTarget(room, unit, owner, fogMask) {
+        const castle = room.structures[owner.castleId]
+        const defensiveTarget = findClosestEnemyInFog(room, unit.ownerId, fogMask, castle)
+
+        if (defensiveTarget) {
+            return defensiveTarget
+        }
+
+        const herald = getPlayerCaptureUnit(room, owner)
+
+        if (herald) {
+            const heraldTarget = getHeraldSupportTarget(room, herald)
+
+            if (heraldTarget) {
+                return heraldTarget
+            }
+        }
+
+        return getExplorationTarget(unit, fogMask)
+    }
+
+    function findClosestEnemyInFog(room, ownerId, fogMask, castle) {
+        const origin = castle || { x: Math.floor(SCREEN.width / 2), y: Math.floor(SCREEN.height / 2) }
+
+        const enemyStructures = Object.values(room.structures)
+            .filter(structure => structure.ownerId && structure.ownerId !== ownerId && !structure.disabled)
+            .filter(structure => isTileVisible(fogMask, structure.x, structure.y))
+            .map(structure => ({ kind: 'structure', value: structure }))
+
+        const enemyUnits = Object.values(room.units)
+            .filter(other => other.ownerId !== ownerId)
+            .filter(other => isTileVisible(fogMask, other.x, other.y))
+            .map(other => ({ kind: 'unit', value: other }))
+
+        const candidates = [...enemyStructures, ...enemyUnits]
+
+        if (!candidates.length) {
+            return null
+        }
+
+        candidates.sort((first, second) => distance(origin, first.value) - distance(origin, second.value))
+
+        return { kind: 'attack', target: candidates[0] }
+    }
+
+    function getHeraldSupportTarget(room, herald) {
+        if (herald.order && herald.order.type === 'capture') {
+            const structure = room.structures[herald.order.structureId]
+
+            if (structure) {
+                return { kind: 'escort-position', x: structure.x, y: structure.y }
+            }
+        }
+
+        if (herald.order && herald.order.type === 'move') {
+            return { kind: 'escort-position', x: herald.order.x, y: herald.order.y }
+        }
+
+        return { kind: 'escort-position', x: herald.x, y: herald.y }
+    }
+
+    function getExplorationTarget(unit, fogMask) {
+        const tile = pickExplorationTile(unit, fogMask)
+
+        if (!tile) {
+            return null
+        }
+
+        return { kind: 'escort-position', x: tile.x, y: tile.y }
+    }
+
+    function pickExplorationTile(unit, fogMask) {
+        const fogTiles = []
+
+        for (let y = 0; y < SCREEN.height; y += 1) {
+            for (let x = 0; x < SCREEN.width; x += 1) {
+                if (!isTileVisible(fogMask, x, y)) {
+                    fogTiles.push({ x, y })
+                }
+            }
+        }
+
+        if (!fogTiles.length) {
+            return null
+        }
+
+        const hash = hashUnitId(unit.unitId)
+
+        fogTiles.sort((first, second) => distance(unit, first) - distance(unit, second))
+
+        const slice = fogTiles.slice(0, Math.min(fogTiles.length, 32))
+        return slice[hash % slice.length]
+    }
+
+    function hashUnitId(unitId) {
+        const text = String(unitId)
+        let hash = 0
+
+        for (let i = 0; i < text.length; i += 1) {
+            hash = (hash * 31 + text.charCodeAt(i)) >>> 0
+        }
+
+        return hash
+    }
+
+    function executeSoldierAction(room, unit, npc, target, now) {
+        if (target.kind === 'attack') {
+            const distanceToTarget = distance(unit, target.target.value)
+
+            if (distanceToTarget <= npc.attackRange) {
+                if (now - unit.lastAttackAt < npc.attackEveryMs) {
+                    return false
+                }
+
+                unit.lastAttackAt = now
+                applyDamage(room, target.target, unit.damage, now, unit.ownerId)
+                return true
+            }
+
+            return moveUnitToward(room, unit, target.target.value, npc.attackRange, now)
+        }
+
+        return moveUnitToward(room, unit, target, 1, now)
     }
 
     function checkVictory(room) {
@@ -2756,11 +2970,15 @@ function getNpcName(type) {
             upgradeStructure,
             researchRecipe,
             spawnNpc,
-            moveCaptureUnitTo,
-            startCaptureOrder,
             toggleAutoplay,
             processPlayerRespawns,
             regenerateBarriers,
+            processHeraldAutonomy,
+            findCapturableForHerald,
+            pickHeraldPatrolTile,
+            assignHeraldMoveOrder,
+            assignHeraldCaptureOrder,
+            spawnCaptureUnit,
             processCaptureUnitOrders,
             processCaptureUnitOrder,
             processCaptures,

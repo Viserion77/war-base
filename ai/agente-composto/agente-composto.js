@@ -18,11 +18,9 @@ import {
 } from './constants.js'
 import {
     countCappedTypes,
-    createCaptureCommand,
     createBuildCommand,
     createCommandForAction,
     createResearchCommand,
-    createScoutCommand,
     createUpgradeCommand,
     createSoldierCommand,
     rankByScores,
@@ -135,10 +133,6 @@ export function buildCommandFromMacro(macro, networks, input, state, playerId) {
         return buildFarmCommand(networks, input, state, playerId)
     }
 
-    if (macro === 'capture') {
-        return createCaptureCommand(state, playerId, predictNetwork(networks.capture, input))
-    }
-
     if (macro === 'research') {
         return buildResearchCommand(networks, input, state, playerId)
     }
@@ -159,10 +153,6 @@ export function buildCommandFromMacro(macro, networks, input, state, playerId) {
         return createUpgradeCommand(state, playerId, predictNetwork(networks['target-upgrade'], input), ['castle'])
     }
 
-    if (macro === 'scout') {
-        return createScoutCommand(state, playerId, predictNetwork(networks.scout, input))
-    }
-
     return null
 }
 
@@ -177,11 +167,6 @@ export function buildFarmCommand(networks, input, state, playerId) {
 
         if (choice.label === 'build-library') {
             const command = createBuildCommand(state, playerId, 'library', predictPlacement(networks, input, 'library'))
-            if (command) return command
-        }
-
-        if (choice.label === 'capture-mine-target') {
-            const command = createCaptureCommand(state, playerId, predictNetwork(networks['target-capture'], input), { type: 'mine' })
             if (command) return command
         }
     }
@@ -267,7 +252,6 @@ export function predictNetwork(network, input) {
 
 export function decideHeuristically(state, playerId) {
     const standardActions = [
-        'capture',
         'build-mine',
         'upgrade-castle',
         'build-library',
@@ -278,7 +262,6 @@ export function decideHeuristically(state, playerId) {
         'build-catapult',
         'build-barracks',
         'spawn-soldier',
-        'scout',
     ]
     const gate = state.catalog?.limits?.castleUpgrade
     const gateClosed = gate ? !gate.ready : false

@@ -24,7 +24,6 @@ export const SCALAR_INPUTS = [
     'rememberedEnemyStructures',
     'proximityToNearestKnownEnemyCastle',
     'hasCaptureOrder',
-    'hasScoutOrder',
     'aliveEnemyCount',
     'visibleTilesFraction',
     'tickFraction',
@@ -50,17 +49,15 @@ export const ESTIMATED_GAME_LENGTH_TICKS = 3600
 
 export const MACRO_ACTIONS = [
     'farm',
-    'capture',
     'research',
     'defend',
     'attack',
     'upgrade',
     'upgrade-castle',
-    'scout',
     'wait',
 ]
 
-export const FARM_ACTIONS = ['build-mine', 'build-library', 'capture-mine-target']
+export const FARM_ACTIONS = ['build-mine', 'build-library']
 export const RESEARCH_ACTIONS = RESEARCH_TYPES
 export const DEFEND_ACTIONS = ['build-archer', 'build-catapult', 'upgrade-defensive']
 export const ATTACK_ACTIONS = ['build-barracks', 'spawn-soldier', 'build-forward-tower']
@@ -68,14 +65,11 @@ export const ATTACK_ACTIONS = ['build-barracks', 'spawn-soldier', 'build-forward
 export const NETWORK_SPECS = {
     router: { inputs: COMPOSITE_INPUT_SIZE, hidden: 96, outputs: MACRO_ACTIONS.length },
     farm: { inputs: COMPOSITE_INPUT_SIZE, hidden: 48, outputs: FARM_ACTIONS.length },
-    capture: { inputs: COMPOSITE_INPUT_SIZE, hidden: 96, outputs: HEATMAP_OUTPUT_SIZE },
     research: { inputs: COMPOSITE_INPUT_SIZE, hidden: 32, outputs: RESEARCH_ACTIONS.length },
     defend: { inputs: COMPOSITE_INPUT_SIZE, hidden: 48, outputs: DEFEND_ACTIONS.length },
     attack: { inputs: COMPOSITE_INPUT_SIZE, hidden: 48, outputs: ATTACK_ACTIONS.length },
     upgrade: { inputs: COMPOSITE_INPUT_SIZE, hidden: 64, outputs: HEATMAP_OUTPUT_SIZE },
-    scout: { inputs: COMPOSITE_INPUT_SIZE, hidden: 64, outputs: HEATMAP_OUTPUT_SIZE },
     placement: { inputs: PLACEMENT_INPUT_SIZE, hidden: 128, outputs: HEATMAP_OUTPUT_SIZE },
-    'target-capture': { inputs: COMPOSITE_INPUT_SIZE, hidden: 64, outputs: HEATMAP_OUTPUT_SIZE },
     'target-defend-upgrade': { inputs: COMPOSITE_INPUT_SIZE, hidden: 64, outputs: HEATMAP_OUTPUT_SIZE },
     'target-upgrade': { inputs: COMPOSITE_INPUT_SIZE, hidden: 64, outputs: HEATMAP_OUTPUT_SIZE },
 }
