@@ -34,7 +34,8 @@
         body {
             margin: 0;
             min-height: 100vh;
-            background: linear-gradient(180deg, #2d2620 0%, #5a4630 42%, var(--sand) 100%);
+            overflow: hidden;
+            background: var(--bg-stone);
             color: var(--ink);
             font-family: "Cinzel", Georgia, "Times New Roman", serif;
         }
@@ -48,7 +49,7 @@
         .app-shell {
             width: calc(100vw - 28px);
             margin: 0 auto;
-            padding: 18px 0;
+            padding: 10px 0 0;
         }
 
         .topbar {
@@ -57,6 +58,10 @@
             justify-content: space-between;
             gap: 16px;
             margin-bottom: 14px;
+            padding: 8px 16px;
+            background: var(--bg-stone-light);
+            border-radius: 8px;
+            border: 1px solid rgba(212, 175, 55, 0.2);
         }
 
         .brand {
@@ -94,10 +99,11 @@
             font-size: clamp(1.35rem, 2vw, 2rem);
             line-height: 1;
             letter-spacing: 0;
+            color: var(--accent-gold);
         }
 
         .brand span {
-            color: var(--muted);
+            color: var(--text-parchment);
             font-size: 0.92rem;
         }
 
@@ -118,7 +124,7 @@
         }
 
         .connection-status {
-            color: var(--muted);
+            color: var(--text-parchment);
             font-size: 0.86rem;
             font-weight: 800;
         }

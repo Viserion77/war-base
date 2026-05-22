@@ -24,6 +24,7 @@ export const SCALAR_INPUTS = [
     'rememberedEnemyStructures',
     'proximityToNearestKnownEnemyCastle',
     'hasCaptureOrder',
+    'hasScoutOrder',
     'aliveEnemyCount',
     'visibleTilesFraction',
     'tickFraction',

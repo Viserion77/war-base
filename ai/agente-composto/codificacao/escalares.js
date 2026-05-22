@@ -56,6 +56,7 @@ export function encodeScalars(state, playerId) {
         ratio(rememberedEnemyStructures.length, 8),
         clamp01(1 - ratio(enemyDistance, getMapDistance(state))),
         player.order && player.order.type === 'capture' ? 1 : 0,
+        player.order && player.order.type === 'move' ? 1 : 0,
         ratio(aliveEnemyCount, 7),
         ratio(countVisibleTiles(state), BOARD_SIZE),
         ratio(state.tick || 0, ESTIMATED_GAME_LENGTH_TICKS),
