@@ -99,6 +99,7 @@ const STRUCTURES = {
         requiresResearch: 'barracks',
         buildLimitBase: 1,
         buildLimitSlope: 1,
+        soldierCapacityPerLevel: 3,
     },
 }
 
@@ -1312,15 +1313,22 @@ function getNpcName(type) {
             return false
         }
 
-        const barracks = getActiveStructures(room, player.playerId, 'barracks')[0]
+        const barracksList = getActiveStructures(room, player.playerId, 'barracks')
 
-        if (!barracks) {
+        if (barracksList.length === 0) {
             addLog(room, `${player.gamerTag} needs an active Barracks.`)
             return false
         }
 
         if (player.gold < npc.cost) {
             addLog(room, `${player.gamerTag} needs ${npc.cost} gold for ${getNpcName(npcType)}.`)
+            return false
+        }
+
+        const barracks = pickBarracksForSpawn(room, barracksList, npcType)
+
+        if (!barracks) {
+            addLog(room, `${player.gamerTag}: all Barracks at ${getNpcName(npcType)} capacity.`)
             return false
         }
 
@@ -1343,6 +1351,7 @@ function getNpcName(type) {
             unitId,
             ownerId: player.playerId,
             type: npcType,
+            barracksId: barracks.structureId,
             x: spawnTile.x,
             y: spawnTile.y,
             integrity: maxIntegrity,
@@ -1358,6 +1367,38 @@ function getNpcName(type) {
 
         addLog(room, `${player.gamerTag} sent a ${getNpcName(npcType)}.`)
         return true
+    }
+
+    function pickBarracksForSpawn(room, barracksList, npcType) {
+        if (npcType !== 'soldier') {
+            return barracksList[0] || null
+        }
+
+        return barracksList.find(barracks => countSoldiersFromBarracks(room, barracks.structureId) < getSoldierCapacity(barracks.level)) || null
+    }
+
+    function getSoldierCapacity(barracksLevel) {
+        const perLevel = STRUCTURES.barracks.soldierCapacityPerLevel
+        const level = Math.max(1, Math.floor(Number(barracksLevel) || 1))
+        return perLevel * level
+    }
+
+    function countSoldiersFromBarracks(room, barracksId) {
+        if (!barracksId) {
+            return 0
+        }
+
+        let total = 0
+
+        for (const unitId in room.units) {
+            const unit = room.units[unitId]
+
+            if (unit.type === 'soldier' && unit.barracksId === barracksId) {
+                total += 1
+            }
+        }
+
+        return total
     }
 
 
@@ -3047,6 +3088,9 @@ function getNpcName(type) {
             canBuildStructure,
             getBuildLimitStatus,
             getBuildLimit,
+            getSoldierCapacity,
+            countSoldiersFromBarracks,
+            pickBarracksForSpawn,
             countActiveOwnedStructures,
             computePlayerLimits,
             computeAverageStructureLevel,

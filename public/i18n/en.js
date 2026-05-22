@@ -113,6 +113,7 @@ export default {
     'error.npcUnavailable': 'Unit unavailable.',
     'error.requiresBarracksResearch': 'Research Military Training first.',
     'error.requiresActiveBarracks': 'Build an active Barracks first.',
+    'error.barracksSoldierCapacity': 'Barracks full: soldier capacity is {cap}.',
     'error.notEnoughGold': 'Not enough gold: needs {cost}.',
     'error.selectOwnedStructure': 'Select one of your structures to upgrade.',
     'error.structureDisabled': 'This structure is disabled.',

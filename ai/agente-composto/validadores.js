@@ -139,10 +139,36 @@ export function createSoldierCommand(state, playerId) {
         return null
     }
 
+    if (!hasFreeSoldierCapacity(state, playerId)) {
+        return null
+    }
+
     return {
         action: 'spawn-npc',
         npcType: 'soldier',
     }
+}
+
+function hasFreeSoldierCapacity(state, playerId) {
+    const perLevel = state.catalog?.structures?.barracks?.soldierCapacityPerLevel || 0
+
+    if (!perLevel) {
+        return true
+    }
+
+    const counts = {}
+
+    for (const unitId in (state.units || {})) {
+        const unit = state.units[unitId]
+
+        if (unit.ownerId === playerId && unit.type === 'soldier' && unit.barracksId) {
+            counts[unit.barracksId] = (counts[unit.barracksId] || 0) + 1
+        }
+    }
+
+    return Object.values(state.structures || {})
+        .filter(structure => structure.ownerId === playerId && structure.type === 'barracks' && !structure.disabled)
+        .some(barracks => (counts[barracks.structureId] || 0) < perLevel * barracks.level)
 }
 
 export function findBuildTile(state, playerId, structureType, heatmap = null) {

@@ -1480,7 +1480,52 @@ function getSpawnNpcDisabledReason(game, player, npcType) {
         return t('error.notEnoughGold', { cost: npc.cost })
     }
 
+    if (npcType === 'soldier' && !hasFreeSoldierCapacity(game.state, player.playerId)) {
+        return t('error.barracksSoldierCapacity', { cap: totalSoldierCapacity(game.state, player.playerId) })
+    }
+
     return ''
+}
+
+function hasFreeSoldierCapacity(state, playerId) {
+    const perLevel = state.catalog?.structures?.barracks?.soldierCapacityPerLevel || 0
+
+    if (!perLevel) {
+        return true
+    }
+
+    const barracksList = activeOwnedStructures(state, playerId, 'barracks')
+    const soldierCounts = countSoldiersByBarracks(state, playerId)
+
+    return barracksList.some(barracks => (soldierCounts[barracks.structureId] || 0) < perLevel * barracks.level)
+}
+
+function totalSoldierCapacity(state, playerId) {
+    const perLevel = state.catalog?.structures?.barracks?.soldierCapacityPerLevel || 0
+
+    return activeOwnedStructures(state, playerId, 'barracks')
+        .reduce((total, barracks) => total + perLevel * barracks.level, 0)
+}
+
+function activeOwnedStructures(state, playerId, type) {
+    return Object.values(state.structures || {})
+        .filter(structure => structure.ownerId === playerId)
+        .filter(structure => structure.type === type)
+        .filter(structure => !structure.disabled)
+}
+
+function countSoldiersByBarracks(state, playerId) {
+    const counts = {}
+
+    for (const unitId in (state.units || {})) {
+        const unit = state.units[unitId]
+
+        if (unit.ownerId === playerId && unit.type === 'soldier' && unit.barracksId) {
+            counts[unit.barracksId] = (counts[unit.barracksId] || 0) + 1
+        }
+    }
+
+    return counts
 }
 
 function selectedPanel(game, player, selectedStructure, uiState) {

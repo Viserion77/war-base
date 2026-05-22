@@ -113,6 +113,7 @@ export default {
     'error.npcUnavailable': 'Unidade indisponivel.',
     'error.requiresBarracksResearch': 'Pesquise Treinamento Militar primeiro.',
     'error.requiresActiveBarracks': 'Construa um Quartel ativo primeiro.',
+    'error.barracksSoldierCapacity': 'Quartel cheio: capacidade maxima de {cap} soldados.',
     'error.notEnoughGold': 'Ouro insuficiente: precisa de {cost}.',
     'error.selectOwnedStructure': 'Selecione uma construcao sua para evoluir.',
     'error.structureDisabled': 'Esta construcao esta desativada.',

@@ -271,6 +271,65 @@ describe('createGame', () => {
         expect(room.logs[0].message).toBe('Alice built Mine.')
     })
 
+    test('caps soldiers at 3 per barracks level and tags units with barracksId', () => {
+        const game = createGame()
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        const room = game.__testing.getRoom(match.hostKey)
+        const player = room.players['player-1']
+        const castle = room.structures[player.castleId]
+
+        player.unlocked.barracks = true
+        player.gold = 100000
+
+        const tile = game.__testing.getEmptyTileNear(room, castle.x, castle.y, 6)
+        const barracks = game.__testing.createStructure(room, {
+            ownerId: 'player-1',
+            type: 'barracks',
+            x: tile.x,
+            y: tile.y,
+        })
+
+        expect(game.__testing.getSoldierCapacity(1)).toBe(3)
+        expect(game.__testing.getSoldierCapacity(2)).toBe(6)
+        expect(game.__testing.getSoldierCapacity(0)).toBe(3)
+
+        for (let index = 0; index < 3; index += 1) {
+            expect(game.__testing.spawnNpc(room, player, { npcType: 'soldier' })).toBe(true)
+        }
+
+        expect(game.__testing.countSoldiersFromBarracks(room, barracks.structureId)).toBe(3)
+        expect(game.__testing.countSoldiersFromBarracks(room, null)).toBe(0)
+
+        const firstWave = Object.values(room.units).filter(unit => unit.type === 'soldier')
+        expect(firstWave.every(unit => unit.barracksId === barracks.structureId)).toBe(true)
+
+        expect(game.__testing.spawnNpc(room, player, { npcType: 'soldier' })).toBe(false)
+        expect(room.logs[0].message).toBe('Alice: all Barracks at Soldier capacity.')
+
+        const secondTile = game.__testing.getEmptyTileNear(room, castle.x, castle.y, 10)
+        const secondBarracks = game.__testing.createStructure(room, {
+            ownerId: 'player-1',
+            type: 'barracks',
+            x: secondTile.x,
+            y: secondTile.y,
+        })
+
+        for (let index = 0; index < 3; index += 1) {
+            expect(game.__testing.spawnNpc(room, player, { npcType: 'soldier' })).toBe(true)
+        }
+        expect(game.__testing.countSoldiersFromBarracks(room, secondBarracks.structureId)).toBe(3)
+        expect(game.__testing.spawnNpc(room, player, { npcType: 'soldier' })).toBe(false)
+
+        barracks.level = 2
+        for (let index = 0; index < 3; index += 1) {
+            expect(game.__testing.spawnNpc(room, player, { npcType: 'soldier' })).toBe(true)
+        }
+        expect(game.__testing.countSoldiersFromBarracks(room, barracks.structureId)).toBe(6)
+        expect(game.__testing.spawnNpc(room, player, { npcType: 'soldier' })).toBe(false)
+
+        expect(game.__testing.pickBarracksForSpawn(room, [barracks], 'herald')).toBe(barracks)
+    })
+
     test('caps non-castle upgrades at the owner castle level', () => {
         const game = createGame()
         const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
