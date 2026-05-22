@@ -119,8 +119,8 @@ function createGameState() {
             players,
             structures,
             units: {
-                'unit-1': { unitId: 'unit-1', ownerId: 'p1', type: 'herald', x: 2, y: 2, integrity: 100, maxIntegrity: 160, barrier: 10, maxBarrier: 40 },
-                'unit-2': { unitId: 'unit-2', ownerId: 'p2', type: 'soldier', x: 8, y: 6, integrity: 120, maxIntegrity: 150, barrier: 0, maxBarrier: 50 },
+                'unit-1': { unitId: 'unit-1', ownerId: 'p1', type: 'herald', x: 2, y: 2, integrity: 100, maxIntegrity: 160, barrier: 10, maxBarrier: 40, order: { type: 'capture', structureId: 'mine-1' }, lastAttackAt: 0, lastDamagedAt: 0 },
+                'unit-2': { unitId: 'unit-2', ownerId: 'p2', type: 'soldier', x: 8, y: 6, integrity: 120, maxIntegrity: 150, barrier: 0, maxBarrier: 50, order: null, lastAttackAt: 0, lastDamagedAt: 0 },
             },
             catalog: {
                 structures: {
@@ -452,6 +452,35 @@ describe('render-screen', () => {
         expect(__renderTestables.formatNumber(Infinity)).toBe('0')
         expect(__renderTestables.clamp(7, 0, 4)).toBe(4)
         expect(__renderTestables.hexToRgba('bad', 0.5)).toBe('rgba(27, 154, 170, 0.5)')
+        const effectContext = createContext()
+        const effectGame = createGameState()
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1100)
+        effectGame.state.structures['archer-1'].lastAttackAt = 900
+        effectGame.state.structures['archer-1'].lastAttackTarget = { kind: 'unit', x: 8, y: 6, targetId: 'unit-2' }
+        __renderTestables.drawUnitOrders(effectContext, effectGame, 'p1')
+        __renderTestables.drawProjectiles(effectContext, effectGame)
+        nowSpy.mockRestore()
+        expect(__renderTestables.getOrderTarget(effectGame.state, { type: 'move', x: 3, y: 4 })).toEqual({ x: 3, y: 4, kind: 'move' })
+        expect(__renderTestables.getOrderTarget(effectGame.state, { type: 'capture', structureId: 'mine-1' })).toMatchObject({ x: 4, y: 1, kind: 'capture' })
+        expect(__renderTestables.getOrderTarget({ structures: {}, memory: { structures: { old: { x: 9, y: 1 } } } }, { type: 'capture', structureId: 'old' })).toMatchObject({ x: 9, y: 1, kind: 'capture' })
+        expect(__renderTestables.getOrderTarget(effectGame.state, { type: 'missing' })).toBeNull()
+        expect(__renderTestables.getRecentEventProgress(1000, 1250, 1000)).toBeCloseTo(0.75)
+        expect(__renderTestables.getRecentEventProgress(0, 1250, 1000)).toBe(0)
+        expect(__renderTestables.drawDamageFlash(effectContext, 0, 0, 10, 1000, 1100)).toBe(true)
+        expect(__renderTestables.drawDamageFlash(effectContext, 0, 0, 10, 1000, 2000)).toBe(false)
+        __renderTestables.drawSelectionMarker(effectContext, 0, 0, 10, { fill: 'rgba(1, 2, 3, 0.1)', stroke: '#f6bd16' })
+        __renderTestables.drawSelectionRing(effectContext, 5, 5, 10, '#f6bd16')
+        __renderTestables.drawOrderPath(effectContext, { x: 0, y: 0 }, { x: 2, y: 1, kind: 'move' }, 10, '#1b9aaa')
+        __renderTestables.drawOrderMarker(effectContext, 5, 5, 10, '#1b9aaa', 'capture')
+        __renderTestables.drawStructureLevelPips(effectContext, 0, 0, 20, 3, '#1b9aaa')
+        __renderTestables.drawRecentBuildDust(effectContext, 0, 0, 20, 1000, 1100, false)
+        __renderTestables.drawStructureStateEffects(effectContext, { level: 2, createdAt: 1000, lastDamagedAt: 1000, disabled: false }, 0, 0, 20, '#1b9aaa')
+        expect(__renderTestables.drawProjectile(effectContext, { type: 'archer', ownerId: 'p1', x: 0, y: 0 }, { x: 3, y: 0 }, 10, 0.5, '#1b9aaa')).toBe(true)
+        expect(__renderTestables.drawProjectile(effectContext, { type: 'catapult', ownerId: 'p1', x: 0, y: 0 }, { x: 3, y: 0 }, 10, 0.5, '#1b9aaa')).toBe(true)
+        expect(__renderTestables.drawProjectile(effectContext, { type: 'soldier', ownerId: 'p1', x: 0, y: 0 }, { x: 1, y: 0 }, 10, 0.5, '#1b9aaa')).toBe(true)
+        expect(__renderTestables.drawProjectile(effectContext, { type: 'archer', ownerId: 'p1', x: 0, y: 0 }, { x: Number.NaN, y: 0 }, 10, 0.5, '#1b9aaa')).toBe(false)
+        expect(__renderTestables.getAttackSourceOwnerColor(effectGame.state, { ownerId: 'missing' })).toBe('#d4af37')
+        expect(effectContext.__calls.some(call => call[0] === 'setLineDash')).toBe(true)
         expect(__renderTestables.escapeHtml('&<>"\'')).toBe('&amp;&lt;&gt;&quot;&#039;')
     })
 
