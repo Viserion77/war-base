@@ -1,5 +1,6 @@
 import { describe, expect, jest, test } from '@jest/globals'
 import renderScreen, { __renderTestables, getStructureAt, getTileFromCanvasEvent, setupScreen } from '../public/render-screen.js'
+import { __resetI18nForTests, getLang, onLangChange, setLang, t } from '../public/i18n/index.js'
 
 function createContext() {
     const calls = []
@@ -45,10 +46,10 @@ function createGameState() {
             color: '#1b9aaa',
             x: 2,
             y: 2,
-            coal: 1200,
-            knowledge: 100,
+            gold: 1200,
+            wisdom: 100,
             alive: true,
-            baseId: 'base-1',
+            castleId: 'castle-1',
             integrity: 120,
             maxIntegrity: 160,
             barrier: 20,
@@ -56,8 +57,8 @@ function createGameState() {
             respawnAt: null,
             activeCaptureUnitId: 'unit-1',
             avatarDeployed: true,
-            order: { type: 'capture', structureId: 'cover-1' },
-            unlocked: { cover: true, taraque: true, per: true, hef: true, tujai: true },
+            order: { type: 'capture', structureId: 'mine-1' },
+            unlocked: { mine: true, library: true, archer: true, catapult: true, barracks: true },
         },
         p2: {
             playerId: 'p2',
@@ -65,10 +66,10 @@ function createGameState() {
             color: '#ef476f',
             x: 9,
             y: 5,
-            coal: 0,
-            knowledge: 0,
+            gold: 0,
+            wisdom: 0,
             alive: true,
-            baseId: 'base-2',
+            castleId: 'castle-2',
             integrity: 80,
             maxIntegrity: 160,
             barrier: 0,
@@ -85,10 +86,10 @@ function createGameState() {
             color: 'not-a-color',
             x: 8,
             y: 1,
-            coal: 0,
-            knowledge: 0,
+            gold: 0,
+            wisdom: 0,
             alive: false,
-            baseId: 'base-3',
+            castleId: 'castle-3',
             integrity: 0,
             maxIntegrity: 160,
             barrier: 0,
@@ -101,13 +102,13 @@ function createGameState() {
         },
     }
     const structures = {
-        'base-1': { structureId: 'base-1', ownerId: 'p1', type: 'base', x: 1, y: 1, level: 2, integrity: 900, maxIntegrity: 1000, barrier: 200, maxBarrier: 500, disabled: false, capture: null },
-        'cover-1': { structureId: 'cover-1', ownerId: null, type: 'cover', x: 4, y: 1, level: 1, integrity: 0, maxIntegrity: 300, barrier: 0, maxBarrier: 100, disabled: true, capture: { playerId: 'p1', progressMs: 15000 } },
-        'taraque-1': { structureId: 'taraque-1', ownerId: 'p1', type: 'taraque', x: 2, y: 1, level: 2, integrity: 350, maxIntegrity: 350, barrier: 150, maxBarrier: 150, disabled: false, capture: null },
-        'per-1': { structureId: 'per-1', ownerId: 'p1', type: 'per', x: 3, y: 1, level: 1, integrity: 500, maxIntegrity: 500, barrier: 0, maxBarrier: 0, disabled: false, capture: null },
-        'hef-1': { structureId: 'hef-1', ownerId: 'p1', type: 'hef', x: 5, y: 1, level: 1, integrity: 200, maxIntegrity: 200, barrier: 100, maxBarrier: 100, disabled: false, capture: null },
-        'tujai-1': { structureId: 'tujai-1', ownerId: 'p1', type: 'tujai', x: 6, y: 1, level: 1, integrity: 200, maxIntegrity: 200, barrier: 0, maxBarrier: 0, disabled: false, capture: null },
-        'base-2': { structureId: 'base-2', ownerId: 'p2', type: 'base', x: 10, y: 6, level: 1, integrity: 1000, maxIntegrity: 1000, barrier: 500, maxBarrier: 500, disabled: false, capture: null },
+        'castle-1': { structureId: 'castle-1', ownerId: 'p1', type: 'castle', x: 1, y: 1, level: 2, integrity: 900, maxIntegrity: 1000, barrier: 200, maxBarrier: 500, disabled: false, capture: null },
+        'mine-1': { structureId: 'mine-1', ownerId: null, type: 'mine', x: 4, y: 1, level: 1, integrity: 0, maxIntegrity: 300, barrier: 0, maxBarrier: 100, disabled: true, capture: { playerId: 'p1', progressMs: 15000 } },
+        'library-1': { structureId: 'library-1', ownerId: 'p1', type: 'library', x: 2, y: 1, level: 2, integrity: 350, maxIntegrity: 350, barrier: 150, maxBarrier: 150, disabled: false, capture: null },
+        'archer-1': { structureId: 'archer-1', ownerId: 'p1', type: 'archer', x: 3, y: 1, level: 1, integrity: 500, maxIntegrity: 500, barrier: 0, maxBarrier: 0, disabled: false, capture: null },
+        'catapult-1': { structureId: 'catapult-1', ownerId: 'p1', type: 'catapult', x: 5, y: 1, level: 1, integrity: 200, maxIntegrity: 200, barrier: 100, maxBarrier: 100, disabled: false, capture: null },
+        'barracks-1': { structureId: 'barracks-1', ownerId: 'p1', type: 'barracks', x: 6, y: 1, level: 1, integrity: 200, maxIntegrity: 200, barrier: 0, maxBarrier: 0, disabled: false, capture: null },
+        'castle-2': { structureId: 'castle-2', ownerId: 'p2', type: 'castle', x: 10, y: 6, level: 1, integrity: 1000, maxIntegrity: 1000, barrier: 500, maxBarrier: 500, disabled: false, capture: null },
     }
 
     return {
@@ -118,33 +119,33 @@ function createGameState() {
             players,
             structures,
             units: {
-                'unit-1': { unitId: 'unit-1', ownerId: 'p1', type: 'capturer', x: 2, y: 2, integrity: 100, maxIntegrity: 160, barrier: 10, maxBarrier: 40 },
-                'unit-2': { unitId: 'unit-2', ownerId: 'p2', type: 'zunim', x: 8, y: 6, integrity: 120, maxIntegrity: 150, barrier: 0, maxBarrier: 50 },
+                'unit-1': { unitId: 'unit-1', ownerId: 'p1', type: 'herald', x: 2, y: 2, integrity: 100, maxIntegrity: 160, barrier: 10, maxBarrier: 40 },
+                'unit-2': { unitId: 'unit-2', ownerId: 'p2', type: 'soldier', x: 8, y: 6, integrity: 120, maxIntegrity: 150, barrier: 0, maxBarrier: 50 },
             },
             catalog: {
                 structures: {
-                    base: { label: 'Base', cost: 500 },
-                    cover: { label: 'Cover', cost: 540, captureable: true },
-                    taraque: { label: 'Taraque', cost: 320, requiresBaseLevel: 2 },
-                    per: { label: 'Per', cost: 140, requiresResearch: 'per', attackRange: 20 },
-                    hef: { label: 'Hef', cost: 200, requiresResearch: 'hef', attackRange: 10 },
-                    tujai: { label: 'Tujai', cost: 600, requiresResearch: 'tujai' },
+                    castle: { label: 'Castle', cost: 500 },
+                    mine: { label: 'Mine', cost: 540, captureable: true },
+                    library: { label: 'Library', cost: 320, requiresCastleLevel: 2 },
+                    archer: { label: 'Archer', cost: 140, requiresResearch: 'archer', attackRange: 20 },
+                    catapult: { label: 'Catapult', cost: 200, requiresResearch: 'catapult', attackRange: 10 },
+                    barracks: { label: 'Barracks', cost: 600, requiresResearch: 'barracks' },
                     custom: { label: 'Custom', cost: 1 },
                 },
                 research: {
-                    per: { label: 'Per', cost: 15, requiresTaraqueLevel: 1 },
-                    hef: { label: 'Hef', cost: 25, requiresTaraqueLevel: 1 },
-                    tujai: { label: 'Tujai', cost: 60, requiresTaraqueLevel: 2 },
+                    archer: { label: 'Archer', cost: 15, requiresLibraryLevel: 1 },
+                    catapult: { label: 'Catapult', cost: 25, requiresLibraryLevel: 1 },
+                    barracks: { label: 'Barracks', cost: 60, requiresLibraryLevel: 2 },
                 },
                 npcs: {
-                    zunim: { label: 'Zunim', cost: 80 },
+                    soldier: { label: 'Soldier', cost: 80 },
                 },
                 limits: {
-                    cover: { current: 0, max: 5 },
-                    taraque: { current: 1, max: 2 },
-                    per: { current: 1, max: 2 },
-                    hef: { current: 1, max: 2 },
-                    tujai: { current: 1, max: 2 },
+                    mine: { current: 0, max: 5 },
+                    library: { current: 1, max: 2 },
+                    archer: { current: 1, max: 2 },
+                    catapult: { current: 1, max: 2 },
+                    barracks: { current: 1, max: 2 },
                 },
             },
             logs: [{ message: '<evento>' }],
@@ -154,6 +155,42 @@ function createGameState() {
 }
 
 describe('render-screen', () => {
+    test('translates and persists language selection', () => {
+        const storage = new Map()
+        const hadStorage = Object.prototype.hasOwnProperty.call(globalThis, 'localStorage')
+        const previousStorage = globalThis.localStorage
+        globalThis.localStorage = {
+            getItem: key => storage.get(key) || null,
+            setItem: (key, value) => storage.set(key, value),
+        }
+
+        __resetI18nForTests()
+        const listener = jest.fn()
+        const unsubscribe = onLangChange(listener)
+
+        expect(getLang()).toBe('pt-BR')
+        expect(t('structure.mine.label')).toBe('Mina')
+        expect(t('hud.tile', { x: 1, y: 2 })).toBe('Terreno 1, 2')
+
+        setLang('en')
+        expect(getLang()).toBe('en')
+        expect(storage.get('war-base:lang')).toBe('en')
+        expect(listener).toHaveBeenCalledWith('en')
+        expect(t('structure.mine.label')).toBe('Mine')
+        expect(t('missing.key')).toBe('missing.key')
+
+        setLang('missing')
+        expect(getLang()).toBe('en')
+
+        unsubscribe()
+        __resetI18nForTests()
+        if (hadStorage) {
+            globalThis.localStorage = previousStorage
+        } else {
+            delete globalThis.localStorage
+        }
+    })
+
     test('sets up the canvas and maps canvas coordinates to tiles', () => {
         const context = createContext()
         const canvas = createCanvas(context)
@@ -174,10 +211,28 @@ describe('render-screen', () => {
         expect(minimalCanvas.width).toBe(50)
     })
 
+    test('draws structures from the game spritesheet when it is loaded', () => {
+        const context = createContext()
+        const canvas = createCanvas(context)
+        const game = createGameState()
+        const spriteSheet = { complete: true, naturalWidth: 384 }
+
+        __renderTestables.setRenderAssetsForTests({ structureSpriteSheet: spriteSheet })
+        renderScreen(canvas, { innerHTML: '', __lastHtml: null }, game, jest.fn(), 'p1', {
+            selectedTile: { x: 1, y: 1 },
+            selectedStructureId: 'castle-1',
+        })
+        __renderTestables.setRenderAssetsForTests()
+
+        expect(context.__calls.some(call => call[0] === 'drawImage')).toBe(true)
+        expect(__renderTestables.isImageReady(spriteSheet)).toBe(true)
+        expect(__renderTestables.drawStructureSprite(context, 'missing', 0, 0, 10, '#000')).toBe(false)
+    })
+
     test('finds structures by tile, including remembered structures', () => {
         const state = {
             structures: { a: { x: 1, y: 2 }, b: { x: 3, y: 4 } },
-            memory: { structures: { remembered: { structureId: 'remembered', type: 'cover', x: 6, y: 6 } } },
+            memory: { structures: { remembered: { structureId: 'remembered', type: 'mine', x: 6, y: 6 } } },
         }
 
         expect(getStructureAt(state, 3, 4)).toBe(state.structures.b)
@@ -194,7 +249,7 @@ describe('render-screen', () => {
 
         renderScreen(canvas, hud, game, requestAnimationFrame, 'p1', {
             selectedTile: { x: 4, y: 1 },
-            selectedStructureId: 'cover-1',
+            selectedStructureId: 'mine-1',
         })
 
         expect(canvas.getContext).toHaveBeenCalledWith('2d')
@@ -203,12 +258,12 @@ describe('render-screen', () => {
         expect(context.__calls.some(call => call[0] === 'fillRect')).toBe(true)
         expect(hud.innerHTML).toContain('Sala ABCDE')
         expect(hud.innerHTML).toContain('Vencedor: &lt;Alice&gt;')
-        expect(hud.innerHTML).toContain('Capturando Cover')
+        expect(hud.innerHTML).toContain('Capturando Mina')
         expect(hud.innerHTML).toContain('Adicionar IA')
         expect(hud.innerHTML).toContain('Ligar autoplay')
         expect(hud.innerHTML).toContain('data-action="toggle-autoplay" data-enabled="true" title="Partida encerrada."')
         expect(hud.innerHTML).toContain('data-action="add-ai" title="Partida encerrada."')
-        expect(hud.innerHTML).toContain('aria-label="Adicionar uma IA neural" disabled')
+        expect(hud.innerHTML).toContain('aria-label="Adicionar uma IA neural a esta sala." disabled')
         expect(hud.innerHTML).toContain('&lt;evento&gt;')
         expect(hud.innerHTML).toContain('Estruturas')
         expect(hud.innerHTML).toContain('Unidades')
@@ -226,26 +281,26 @@ describe('render-screen', () => {
         game.state.fogMask[4][4] = false
         game.state.memory = {
             structures: {
-                'remembered-cover': { structureId: 'remembered-cover', ownerId: 'p2', type: 'cover', x: 4, y: 4, level: 1, disabled: false, seenAt: 1 },
-                'remembered-per': { structureId: 'remembered-per', ownerId: 'p2', type: 'per', x: 3, y: 3, level: 1, disabled: false, seenAt: 1 },
+                'remembered-mine': { structureId: 'remembered-mine', ownerId: 'p2', type: 'mine', x: 4, y: 4, level: 1, disabled: false, seenAt: 1 },
+                'remembered-archer': { structureId: 'remembered-archer', ownerId: 'p2', type: 'archer', x: 3, y: 3, level: 1, disabled: false, seenAt: 1 },
             },
         }
 
         renderScreen(canvas, hud, game, jest.fn(), 'p1', {
             selectedTile: { x: 4, y: 4 },
-            selectedStructureId: 'remembered-cover',
+            selectedStructureId: 'remembered-mine',
         })
 
         expect(__renderTestables.hasRememberedStructureAt(game.state, 4, 4)).toBe(true)
-        expect(__renderTestables.hasRememberedStructureAt({ structures: { 'remembered-cover': { x: 4, y: 4 } }, memory: game.state.memory }, 4, 4)).toBe(false)
+        expect(__renderTestables.hasRememberedStructureAt({ structures: { 'remembered-mine': { x: 4, y: 4 } }, memory: game.state.memory }, 4, 4)).toBe(false)
         expect(__renderTestables.hasRememberedStructureAt({ structures: {}, memory: null }, 4, 4)).toBe(false)
         expect(__renderTestables.isTileVisible(game.state.fogMask, 3, 3)).toBe(false)
         expect(__renderTestables.isTileVisible(null, 3, 3)).toBe(true)
         expect(__renderTestables.getRememberedStructureColor('#ef476f')).toMatch(/^#[0-9a-f]{6}$/)
         expect(__renderTestables.getRememberedStructureColor('bad')).toBe('#77736a')
         expect(__renderTestables.getRememberedStructureColor()).toBe('#77736a')
-        expect(__renderTestables.getSelectedStructure(game.state, { selectedStructureId: 'remembered-cover' })).toMatchObject({ remembered: true })
-        expect(__renderTestables.selectedPanel(game, game.state.players.p1, { ...game.state.memory.structures['remembered-cover'], remembered: true }, { selectedTile: { x: 4, y: 4 } })).toContain('Ultimo avistamento')
+        expect(__renderTestables.getSelectedStructure(game.state, { selectedStructureId: 'remembered-mine' })).toMatchObject({ remembered: true })
+        expect(__renderTestables.selectedPanel(game, game.state.players.p1, { ...game.state.memory.structures['remembered-mine'], remembered: true }, { selectedTile: { x: 4, y: 4 } })).toContain('Ultimo avistamento')
         expect(context.__calls.some(call => call[0] === 'set:fillStyle' && call[1] === 'rgba(22, 25, 28, 0.55)')).toBe(true)
         expect(context.__calls.some(call => call[0] === 'set:fillStyle' && call[1] === 'rgba(47, 51, 55, 0.30)')).toBe(true)
     })
@@ -275,26 +330,26 @@ describe('render-screen', () => {
     test('covers helper branches for disabled reasons, labels, and formatting', () => {
         const game = createGameState()
         const player = game.state.players.p1
-        const cover = game.state.structures['cover-1']
-        const base = game.state.structures['base-1']
+        const mine = game.state.structures['mine-1']
+        const castle = game.state.structures['castle-1']
 
         expect(__renderTestables.captureStatusPanel(null)).toBe('')
         expect(__renderTestables.getCaptureStatus({ state: { structures: {}, catalog: { structures: {} }, config: {} } }, 'p1')).toBeNull()
         expect(__renderTestables.getCaptureStatus(game, 'missing')).toBeNull()
         expect(__renderTestables.getResearchDisabledReason({ state: { catalog: { research: {} }, structures: {} } }, player, 'missing')).toBe('Pesquisa indisponivel.')
-        expect(__renderTestables.getResearchDisabledReason(game, null, 'per')).toBe('Jogador fora da partida.')
-        player.unlocked.per = true
-        expect(__renderTestables.getResearchDisabledReason(game, player, 'per')).toBe('Per ja pesquisada.')
-        player.unlocked.per = false
-        game.state.structures['taraque-1'].level = 0
-        expect(__renderTestables.getResearchDisabledReason(game, player, 'per')).toBe('Per requer Taraque nivel 1.')
-        game.state.structures['taraque-1'].level = 1
-        player.knowledge = 0
-        expect(__renderTestables.getResearchDisabledReason(game, player, 'per')).toBe('Conhecimento insuficiente: precisa de 15.')
-        player.knowledge = 100
-        expect(__renderTestables.getResearchDisabledReason(game, player, 'per')).toBe('')
+        expect(__renderTestables.getResearchDisabledReason(game, null, 'archer')).toBe('Jogador fora da partida.')
+        player.unlocked.archer = true
+        expect(__renderTestables.getResearchDisabledReason(game, player, 'archer')).toBe('Tiro de Arqueiro ja pesquisada.')
+        player.unlocked.archer = false
+        game.state.structures['library-1'].level = 0
+        expect(__renderTestables.getResearchDisabledReason(game, player, 'archer')).toBe('Tiro de Arqueiro requer Biblioteca nivel 1.')
+        game.state.structures['library-1'].level = 1
+        player.wisdom = 0
+        expect(__renderTestables.getResearchDisabledReason(game, player, 'archer')).toBe('Sabedoria insuficiente: precisa de 15.')
+        player.wisdom = 100
+        expect(__renderTestables.getResearchDisabledReason(game, player, 'archer')).toBe('')
         player.autoplay = true
-        expect(__renderTestables.getResearchDisabledReason(game, player, 'per')).toBe('Autoplay ligado.')
+        expect(__renderTestables.getResearchDisabledReason(game, player, 'archer')).toBe('Autoplay ligado.')
         player.autoplay = false
 
         expect(__renderTestables.addAiButton({ state: { ...game.state, winnerId: null } })).not.toContain('disabled')
@@ -309,70 +364,70 @@ describe('render-screen', () => {
         fullGame.state.config.maxPlayersPerRoom = 3
         expect(__renderTestables.getAddAiDisabledReason(fullGame)).toBe('Sala cheia.')
 
-        expect(__renderTestables.getSpawnNpcDisabledReason({ state: { catalog: { npcs: {} }, structures: {} } }, player, 'missing')).toBe('NPC indisponivel.')
-        expect(__renderTestables.getSpawnNpcDisabledReason(game, null, 'zunim')).toBe('Jogador fora da partida.')
-        player.unlocked.tujai = false
-        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'zunim')).toBe('Pesquise Tujai primeiro.')
-        player.unlocked.tujai = true
+        expect(__renderTestables.getSpawnNpcDisabledReason({ state: { catalog: { npcs: {} }, structures: {} } }, player, 'missing')).toBe('Unidade indisponivel.')
+        expect(__renderTestables.getSpawnNpcDisabledReason(game, null, 'soldier')).toBe('Jogador fora da partida.')
+        player.unlocked.barracks = false
+        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'soldier')).toBe('Pesquise Treinamento Militar primeiro.')
+        player.unlocked.barracks = true
         player.autoplay = true
-        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'zunim')).toBe('Autoplay ligado.')
+        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'soldier')).toBe('Autoplay ligado.')
         player.autoplay = false
-        game.state.structures['tujai-1'].disabled = true
-        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'zunim')).toBe('Construa uma Tujai ativa primeiro.')
-        game.state.structures['tujai-1'].disabled = false
-        player.coal = 0
-        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'zunim')).toBe('Carvao insuficiente: precisa de 80.')
-        player.coal = 1200
-        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'zunim')).toBe('')
+        game.state.structures['barracks-1'].disabled = true
+        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'soldier')).toBe('Construa um Quartel ativo primeiro.')
+        game.state.structures['barracks-1'].disabled = false
+        player.gold = 0
+        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'soldier')).toBe('Ouro insuficiente: precisa de 80.')
+        player.gold = 1200
+        expect(__renderTestables.getSpawnNpcDisabledReason(game, player, 'soldier')).toBe('')
 
         expect(__renderTestables.selectedPanel(game, player, null, { selectedTile: null })).toContain('Nenhum terreno')
-        expect(__renderTestables.getUpgradeDisabledReason(player, game.state.structures['base-2'], 1)).toBe('Selecione uma construcao sua para upgrade.')
-        expect(__renderTestables.getUpgradeDisabledReason(player, { ...cover, ownerId: 'p1' }, 1)).toBe('Esta construcao esta desativada.')
-        expect(__renderTestables.getUpgradeDisabledReason({ ...player, autoplay: true }, { ...game.state.structures['per-1'], level: 1 }, 1, 2)).toBe('Autoplay ligado.')
-        expect(__renderTestables.getUpgradeDisabledReason(player, { ...game.state.structures['per-1'], level: 2 }, 1, 2)).toBe('Bloqueado: nivel da estrutura ja igual ao nivel da Base.')
-        expect(__renderTestables.getUpgradeDisabledReason({ ...player, coal: 0 }, base, 999)).toBe('Carvao insuficiente: precisa de 999.')
-        expect(__renderTestables.getUpgradeDisabledReason(player, base, 1)).toBe('')
+        expect(__renderTestables.getUpgradeDisabledReason(player, game.state.structures['castle-2'], 1)).toBe('Selecione uma construcao sua para evoluir.')
+        expect(__renderTestables.getUpgradeDisabledReason(player, { ...mine, ownerId: 'p1' }, 1)).toBe('Esta construcao esta desativada.')
+        expect(__renderTestables.getUpgradeDisabledReason({ ...player, autoplay: true }, { ...game.state.structures['archer-1'], level: 1 }, 1, 2)).toBe('Autoplay ligado.')
+        expect(__renderTestables.getUpgradeDisabledReason(player, { ...game.state.structures['archer-1'], level: 2 }, 1, 2)).toBe('Bloqueado: nivel da estrutura ja igual ao nivel do Castelo.')
+        expect(__renderTestables.getUpgradeDisabledReason({ ...player, gold: 0 }, castle, 999)).toBe('Ouro insuficiente: precisa de 999.')
+        expect(__renderTestables.getUpgradeDisabledReason(player, castle, 1)).toBe('')
 
         expect(__renderTestables.getCaptureDisabledReason({ state: { catalog: { structures: {} } } }, player, { type: 'unknown' })).toBe('Esta construcao nao pode ser capturada.')
-        expect(__renderTestables.getCaptureDisabledReason(game, null, cover)).toBe('Jogador fora da partida.')
-        expect(__renderTestables.getCaptureDisabledReason(game, { ...player, respawnAt: Date.now() + 1000 }, cover)).toContain('Avatar reaparece')
-        expect(__renderTestables.getCaptureDisabledReason(game, { ...player, autoplay: true }, cover)).toBe('Autoplay ligado.')
-        expect(__renderTestables.getCaptureDisabledReason(game, player, { ...cover, ownerId: 'p1', disabled: false })).toBe('Esta construcao ja e sua.')
-        expect(__renderTestables.getCaptureDisabledReason(game, player, { ...cover, ownerId: 'p1', disabled: true })).toBe('Construcao sua desativada.')
-        expect(__renderTestables.getCaptureDisabledReason(game, player, cover)).toBe('Ordem de captura ja ativa.')
-        expect(__renderTestables.getCaptureDisabledReason(game, { ...player, order: null }, cover)).toBe('')
+        expect(__renderTestables.getCaptureDisabledReason(game, null, mine)).toBe('Jogador fora da partida.')
+        expect(__renderTestables.getCaptureDisabledReason(game, { ...player, respawnAt: Date.now() + 1000 }, mine)).toContain('Avatar reaparece')
+        expect(__renderTestables.getCaptureDisabledReason(game, { ...player, autoplay: true }, mine)).toBe('Autoplay ligado.')
+        expect(__renderTestables.getCaptureDisabledReason(game, player, { ...mine, ownerId: 'p1', disabled: false })).toBe('Esta construcao ja e sua.')
+        expect(__renderTestables.getCaptureDisabledReason(game, player, { ...mine, ownerId: 'p1', disabled: true })).toBe('Construcao sua desativada.')
+        expect(__renderTestables.getCaptureDisabledReason(game, player, mine)).toBe('Ordem de captura ja ativa.')
+        expect(__renderTestables.getCaptureDisabledReason(game, { ...player, order: null }, mine)).toBe('')
 
         expect(__renderTestables.logsList({ state: { logs: [] } })).toContain('Sem eventos')
         expect(__renderTestables.logsList({ state: { logs: [{ at: '2020-01-01T13:05:00.000Z', message: '<evento>' }] } })).toContain('<time>13:05</time>')
         expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: { x: 7, y: 1 } }, 'missing')).toBe('Construcao indisponivel.')
-        expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: null }, 'cover')).toBe('Selecione um terreno.')
-        expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: { x: -1, y: 0 } }, 'cover')).toBe('Terreno invalido.')
-        expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: { x: 50, y: 50 } }, 'cover')).toBe('Terreno invalido.')
-        expect(__renderTestables.getBuildDisabledReason(game, { ...player, alive: false }, { selectedTile: { x: 7, y: 1 } }, 'cover')).toBe('Jogador fora da partida.')
-        expect(__renderTestables.getBuildDisabledReason(game, { ...player, coal: 0 }, { selectedTile: { x: 7, y: 1 } }, 'cover')).toBe('Carvao insuficiente: precisa de 540.')
+        expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: null }, 'mine')).toBe('Selecione um terreno.')
+        expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: { x: -1, y: 0 } }, 'mine')).toBe('Terreno invalido.')
+        expect(__renderTestables.getBuildDisabledReason(game, player, { selectedTile: { x: 50, y: 50 } }, 'mine')).toBe('Terreno invalido.')
+        expect(__renderTestables.getBuildDisabledReason(game, { ...player, alive: false }, { selectedTile: { x: 7, y: 1 } }, 'mine')).toBe('Jogador fora da partida.')
+        expect(__renderTestables.getBuildDisabledReason(game, { ...player, gold: 0 }, { selectedTile: { x: 7, y: 1 } }, 'mine')).toBe('Ouro insuficiente: precisa de 540.')
         const limitGame = createGameState()
-        limitGame.state.catalog.limits.cover = { current: 5, max: 5 }
-        expect(__renderTestables.getBuildDisabledReason(limitGame, limitGame.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'cover')).toBe('5/5 - suba a Base.')
-        expect(__renderTestables.getBuildRequirementMessage(limitGame, limitGame.state.players.p1, 'cover')).toBe('5/5 - suba a Base.')
-        expect(__renderTestables.canBuild(limitGame, limitGame.state.players.p1, 'cover')).toBe(false)
-        expect(__renderTestables.canBuild(limitGame, null, 'cover')).toBe(false)
+        limitGame.state.catalog.limits.mine = { current: 5, max: 5 }
+        expect(__renderTestables.getBuildDisabledReason(limitGame, limitGame.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'mine')).toBe('5/5 - suba o Castelo.')
+        expect(__renderTestables.getBuildRequirementMessage(limitGame, limitGame.state.players.p1, 'mine')).toBe('5/5 - suba o Castelo.')
+        expect(__renderTestables.canBuild(limitGame, limitGame.state.players.p1, 'mine')).toBe(false)
+        expect(__renderTestables.canBuild(limitGame, null, 'mine')).toBe(false)
         expect(__renderTestables.canBuild(limitGame, limitGame.state.players.p1, 'missing')).toBe(false)
-        expect(__renderTestables.buildButton(limitGame, limitGame.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'cover')).toContain('limit-full')
-        limitGame.state.catalog.limits.cover = { current: 6, max: 5 }
-        expect(__renderTestables.getBuildLimitDisabledReason(limitGame, 'cover')).toBe('6/5 - sem novos slots ate cair abaixo do limite.')
-        expect(__renderTestables.buildButton(limitGame, limitGame.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'cover')).toContain('limit-over')
+        expect(__renderTestables.buildButton(limitGame, limitGame.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'mine')).toContain('limit-full')
+        limitGame.state.catalog.limits.mine = { current: 6, max: 5 }
+        expect(__renderTestables.getBuildLimitDisabledReason(limitGame, 'mine')).toBe('6/5 - sem novos slots ate cair abaixo do limite.')
+        expect(__renderTestables.buildButton(limitGame, limitGame.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'mine')).toContain('limit-over')
         expect(__renderTestables.getBuildLimitClass(null)).toBe('')
-        expect(__renderTestables.getBuildLimitDisabledReason({ state: { catalog: {} } }, 'cover')).toBe('')
+        expect(__renderTestables.getBuildLimitDisabledReason({ state: { catalog: {} } }, 'mine')).toBe('')
 
-        expect(__renderTestables.getBuildRequirementMessage(game, player, 'taraque')).toBe('Base nivel 2 necessaria.')
-        player.unlocked.per = false
-        expect(__renderTestables.getBuildRequirementMessage(game, player, 'per')).toBe('Pesquise Per primeiro.')
+        expect(__renderTestables.getBuildRequirementMessage(game, player, 'library')).toBe('Castelo nivel 2 necessario.')
+        player.unlocked.archer = false
+        expect(__renderTestables.getBuildRequirementMessage(game, player, 'archer')).toBe('Pesquise Tiro de Arqueiro primeiro.')
         expect(__renderTestables.getBuildRequirementMessage(game, { ...player, unlocked: { custom: false } }, 'custom')).toBe('Custom ainda nao liberada.')
 
         expect(__renderTestables.getSelectionColor(null).stroke).toBe('#f6bd16')
         expect(__renderTestables.getSelectionColor({ status: 'blocked' }).stroke).toBe('#d1495b')
-        expect(__renderTestables.canBuild(game, player, 'cover')).toBe(true)
-        expect(__renderTestables.highestStructureLevel(game.state, 'p1', 'taraque')).toBe(1)
+        expect(__renderTestables.canBuild(game, player, 'mine')).toBe(true)
+        expect(__renderTestables.highestStructureLevel(game.state, 'p1', 'library')).toBe(1)
         expect(__renderTestables.getSelectedStructure(game.state, { selectedTile: null })).toBeNull()
         expect(__renderTestables.getActorAt(game.state, 8, 6)).toBe(game.state.units['unit-2'])
         expect(__renderTestables.playerStatusLabel(null)).toBe('fora')
@@ -383,7 +438,7 @@ describe('render-screen', () => {
         expect(__renderTestables.isInsideMap(game.state, 0, 0)).toBe(true)
         expect(__renderTestables.distance({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5)
         expect(__renderTestables.getStructureWeight('unknown')).toBe(10)
-        game.state.structures['disabled-owned'] = { ...game.state.structures['base-1'], structureId: 'disabled-owned', disabled: true }
+        game.state.structures['disabled-owned'] = { ...game.state.structures['castle-1'], structureId: 'disabled-owned', disabled: true }
         expect(__renderTestables.getPlayerStructureCount(game.state, 'p1')).toBe(5)
         expect(__renderTestables.getPlayerStructureCount({ structures: undefined }, 'p1')).toBe(0)
         expect(__renderTestables.getPlayerUnitCount(game.state, 'p1')).toBe(1)
@@ -422,7 +477,7 @@ describe('render-screen', () => {
             selectedStructureId: null,
         })
 
-        game.state.structures['cover-2'] = { ...game.state.structures['cover-1'], structureId: 'cover-2', x: 5, y: 1, capture: { playerId: 'p1', progressMs: 20000 } }
+        game.state.structures['mine-2'] = { ...game.state.structures['mine-1'], structureId: 'mine-2', x: 5, y: 1, capture: { playerId: 'p1', progressMs: 20000 } }
         expect(__renderTestables.getCaptureStatus(game, 'p1').percent).toBe(67)
         expect(__renderTestables.getBuildDisabledReason(game, game.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'custom')).toBe('Custom ainda nao liberada.')
         expect(__renderTestables.getBuildRequirementMessage(game, { ...game.state.players.p1, unlocked: { custom: true } }, 'custom')).toBe('Custom indisponivel.')
@@ -436,7 +491,7 @@ describe('render-screen', () => {
         expect(__renderTestables.playersList(game, 'p1')).toContain('<small>IA</small>')
         game.state.players.p1.autoplay = true
         expect(__renderTestables.playersList(game, 'p1')).toContain('<small>Autoplay</small>')
-        expect(__renderTestables.getBuildDisabledReason(game, game.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'cover')).toBe('Autoplay ligado.')
+        expect(__renderTestables.getBuildDisabledReason(game, game.state.players.p1, { selectedTile: { x: 7, y: 1 } }, 'mine')).toBe('Autoplay ligado.')
         expect(__renderTestables.autoplayButton({ state: { ...game.state, winnerId: null } }, game.state.players.p1)).toContain('Desligar autoplay')
         expect(__renderTestables.playerStatusLabel({ alive: true, activeCaptureUnitId: null, avatarDeployed: false })).toBe('pronta')
     })
@@ -457,24 +512,24 @@ describe('render-screen', () => {
         expect(hud.innerHTML).toBe('')
 
         game.state.winnerId = null
-        game.state.structures['neutral-active'] = { structureId: 'neutral-active', ownerId: null, type: 'cover', x: 7, y: 2, level: 1, integrity: 300, maxIntegrity: 300, barrier: 0, maxBarrier: 100, disabled: false, capture: null }
+        game.state.structures['neutral-active'] = { structureId: 'neutral-active', ownerId: null, type: 'mine', x: 7, y: 2, level: 1, integrity: 300, maxIntegrity: 300, barrier: 0, maxBarrier: 100, disabled: false, capture: null }
         renderScreen(canvas, hud, game, requestAnimationFrame, 'p1', {
             selectedTile: { x: 1, y: 1 },
-            selectedStructureId: 'base-1',
+            selectedStructureId: 'castle-1',
         })
         const firstHtml = hud.innerHTML
         renderScreen(canvas, hud, game, requestAnimationFrame, 'p1', {
             selectedTile: { x: 1, y: 1 },
-            selectedStructureId: 'base-1',
+            selectedStructureId: 'castle-1',
         })
         expect(hud.innerHTML).toBe(firstHtml)
         expect(hud.innerHTML).not.toContain('Vencedor')
-        expect(hud.innerHTML).toContain('Upgrade 1125')
+        expect(hud.innerHTML).toContain('Evoluir 1125')
 
         const deadPlayerGame = createGameState()
         renderScreen(canvas, { innerHTML: '', __lastHtml: null }, deadPlayerGame, jest.fn(), 'p3', {
             selectedTile: { x: 1, y: 1 },
-            selectedStructureId: 'base-1',
+            selectedStructureId: 'castle-1',
         })
 
         const captureFallbackGame = {
@@ -486,22 +541,22 @@ describe('render-screen', () => {
                 config: { captureDurationMs: 0 },
             },
         }
-        expect(__renderTestables.getCaptureStatus(captureFallbackGame, 'p1')).toMatchObject({ label: 'mystery', percent: 100 })
+        expect(__renderTestables.getCaptureStatus(captureFallbackGame, 'p1')).toMatchObject({ label: 'Mystery', percent: 100 })
         expect(__renderTestables.getCaptureStatus({ state: { structures: undefined, catalog: { structures: {} }, config: {} } }, 'p1')).toBeNull()
 
         game.state.structures['unknown-shape'] = { structureId: 'unknown-shape', ownerId: 'p1', type: 'custom', x: 8, y: 2, level: 1, integrity: 1, maxIntegrity: 1, barrier: 0, maxBarrier: 0, disabled: false, capture: null }
-        game.state.units['unit-without-owner'] = { unitId: 'unit-without-owner', ownerId: 'missing', type: 'zunim', x: 9, y: 2, integrity: 1, maxIntegrity: 1, barrier: 0, maxBarrier: 0 }
+        game.state.units['unit-without-owner'] = { unitId: 'unit-without-owner', ownerId: 'missing', type: 'soldier', x: 9, y: 2, integrity: 1, maxIntegrity: 1, barrier: 0, maxBarrier: 0 }
         renderScreen(canvas, { innerHTML: '', __lastHtml: null }, game, jest.fn(), 'p1', { selectedTile: null, selectedStructureId: null })
 
-        const player = { ...game.state.players.p1, order: null, coal: 5000 }
-        const researchReadyPlayer = { ...player, unlocked: { ...player.unlocked, per: false }, knowledge: 100 }
-        expect(__renderTestables.researchButton(game, researchReadyPlayer, 'per')).not.toContain('disabled')
+        const player = { ...game.state.players.p1, order: null, gold: 5000 }
+        const researchReadyPlayer = { ...player, unlocked: { ...player.unlocked, archer: false }, wisdom: 100 }
+        expect(__renderTestables.researchButton(game, researchReadyPlayer, 'archer')).not.toContain('disabled')
         expect(__renderTestables.researchButton({ state: { catalog: { research: {} }, structures: {} } }, player, 'missing')).toContain('missing')
         expect(__renderTestables.npcButton({ state: { catalog: { npcs: {}, structures: {} }, structures: {} } }, player, 'missing')).toContain('missing')
-        expect(__renderTestables.selectedPanel(game, player, game.state.structures['base-1'], { selectedTile: { x: 1, y: 1 } })).not.toContain('Iniciar captura')
-        expect(__renderTestables.selectedPanel(game, { ...player, order: null }, game.state.structures['cover-1'], { selectedTile: { x: 4, y: 1 } })).toContain('Iniciar captura')
-        expect(__renderTestables.getBuildRequirementMessage({ state: { catalog: { structures: { tower: { label: 'Tower', requiresResearch: 'missing' } }, research: {} } } }, player, 'tower')).toBe('Pesquise missing primeiro.')
-        expect(__renderTestables.highestStructureLevel({ structures: undefined }, 'p1', 'taraque')).toBe(0)
+        expect(__renderTestables.selectedPanel(game, player, game.state.structures['castle-1'], { selectedTile: { x: 1, y: 1 } })).not.toContain('Iniciar captura')
+        expect(__renderTestables.selectedPanel(game, { ...player, order: null }, game.state.structures['mine-1'], { selectedTile: { x: 4, y: 1 } })).toContain('Iniciar captura')
+        expect(__renderTestables.getBuildRequirementMessage({ state: { catalog: { structures: { tower: { label: 'Tower', requiresResearch: 'missing' } }, research: {} } } }, player, 'tower')).toBe('Pesquise Missing primeiro.')
+        expect(__renderTestables.highestStructureLevel({ structures: undefined }, 'p1', 'library')).toBe(0)
         expect(__renderTestables.getActorAt({ players: undefined, units: undefined }, 0, 0)).toBeNull()
         expect(__renderTestables.isNearOwnedAnchor({ structures: undefined, config: { buildRange: 1 } }, 'p1', 0, 0)).toBe(false)
     })

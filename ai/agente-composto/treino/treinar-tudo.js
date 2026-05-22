@@ -1,7 +1,7 @@
 /* istanbul ignore file -- entrypoint for npm run train:ai. */
 import path from 'path'
 import { fileURLToPath } from 'url'
-import RedeNeural from '../../rede-neural/rede-neural.js'
+import NeuralNetwork from '../../rede-neural/rede-neural.js'
 import { NETWORK_SPECS } from '../constants.js'
 import { datasetRouter } from './dataset-router.js'
 import { datasetFarm } from './dataset-farm.js'
@@ -12,7 +12,7 @@ import { datasetAttack } from './dataset-attack.js'
 import { datasetUpgrade } from './dataset-upgrade.js'
 import { datasetScout } from './dataset-scout.js'
 import { datasetPlacement } from './dataset-placement.js'
-import { indiceMaiorScore, salvarRede, treinarRedeComDataset } from './treinar-rede.js'
+import { highestScoreIndex, saveNetwork, trainNetworkWithDataset } from './treinar-rede.js'
 
 const OUTPUT_DIR = fileURLToPath(new URL('../redes/', import.meta.url))
 
@@ -31,35 +31,35 @@ export const TRAINING_PLAN = {
     'target-upgrade': datasetUpgrade,
 }
 
-export function treinarTudo({ outputDir = OUTPUT_DIR, epocas } = {}) {
-    const arquivos = []
+export function trainAll({ outputDir = OUTPUT_DIR, epochs } = {}) {
+    const files = []
 
-    for (const [nome, dataset] of Object.entries(TRAINING_PLAN)) {
-        const modelo = treinarRedeComDataset({
-            nome,
-            spec: NETWORK_SPECS[nome],
+    for (const [name, dataset] of Object.entries(TRAINING_PLAN)) {
+        const model = trainNetworkWithDataset({
+            name,
+            spec: NETWORK_SPECS[name],
             dataset,
-            epocas,
+            epochs,
         })
-        smokeTest(nome, modelo, dataset)
-        arquivos.push(salvarRede({ nome, modelo, outputDir }))
+        smokeTest(name, model, dataset)
+        files.push(saveNetwork({ name, model, outputDir }))
     }
 
-    return arquivos
+    return files
 }
 
-export function smokeTest(nome, modelo, dataset) {
-    if (!dataset.length || modelo.rede.neuroniosSaida > 256) {
+export function smokeTest(name, model, dataset) {
+    if (!dataset.length || model.network.outputNeurons > 256) {
         return true
     }
 
-    const rede = RedeNeural.fromJSON(modelo.rede)
-    const exemplo = dataset[0]
-    const esperado = indiceMaiorScore(exemplo.saidas)
-    const obtido = indiceMaiorScore(rede.prever(exemplo.entradas))
+    const network = NeuralNetwork.fromJSON(model.network)
+    const example = dataset[0]
+    const expected = highestScoreIndex(example.outputs)
+    const actual = highestScoreIndex(network.predict(example.inputs))
 
-    if (obtido !== esperado) {
-        throw new Error('Smoke test falhou para ' + nome + ': esperado ' + esperado + ', obtido ' + obtido)
+    if (actual !== expected) {
+        throw new Error('Smoke test failed for ' + name + ': expected ' + expected + ', actual ' + actual)
     }
 
     return true
@@ -70,6 +70,6 @@ function isMainModule() {
 }
 
 if (isMainModule()) {
-    const arquivos = treinarTudo()
-    console.log('Redes compostas salvas em:\n' + arquivos.join('\n'))
+    const files = trainAll()
+    console.log('Composite networks saved in:\n' + files.join('\n'))
 }

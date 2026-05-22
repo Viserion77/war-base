@@ -1,88 +1,88 @@
-export default class Matriz {
-    constructor(linhas, colunas, conteudo = null) {
-        this.linhas = linhas
-        this.colunas = colunas
-        this.conteudo = conteudo || Array.from({ length: linhas }, () => Array(colunas).fill(0))
+export default class Matrix {
+    constructor(rows, columns, content = null) {
+        this.rows = rows
+        this.columns = columns
+        this.content = content || Array.from({ length: rows }, () => Array(columns).fill(0))
     }
 
-    static arrayParaMatriz(array) {
-        const matriz = new Matriz(array.length, 1)
+    static fromArray(array) {
+        const matrix = new Matrix(array.length, 1)
 
-        return matriz.mapear((valor, linha) => array[linha])
+        return matrix.map((value, row) => array[row])
     }
 
-    static matrizParaArray(matriz) {
+    static toArray(matrix) {
         const array = []
 
-        matriz.mapear(valor => {
-            array.push(valor)
-            return valor
+        matrix.map(value => {
+            array.push(value)
+            return value
         })
 
         return array
     }
 
-    static mapear(matriz, funcao) {
-        return new Matriz(matriz.linhas, matriz.colunas).mapear((valor, linha, coluna) => {
-            return funcao(matriz.conteudo[linha][coluna], linha, coluna)
+    static map(matrix, callback) {
+        return new Matrix(matrix.rows, matrix.columns).map((value, row, column) => {
+            return callback(matrix.content[row][column], row, column)
         })
     }
 
-    mapear(funcao) {
-        this.conteudo = this.conteudo.map((linhaValores, linha) => {
-            return linhaValores.map((valor, coluna) => funcao(valor, linha, coluna))
+    map(callback) {
+        this.content = this.content.map((rowValues, row) => {
+            return rowValues.map((value, column) => callback(value, row, column))
         })
 
         return this
     }
 
-    static adicionar(matrizA, matrizB) {
-        return Matriz.mapear(matrizA, (valor, linha, coluna) => valor + matrizB.conteudo[linha][coluna])
+    static add(first, second) {
+        return Matrix.map(first, (value, row, column) => value + second.content[row][column])
     }
 
-    static subtrair(matrizA, matrizB) {
-        return Matriz.mapear(matrizA, (valor, linha, coluna) => valor - matrizB.conteudo[linha][coluna])
+    static subtract(first, second) {
+        return Matrix.map(first, (value, row, column) => value - second.content[row][column])
     }
 
-    static hadamard(matrizA, matrizB) {
-        return Matriz.mapear(matrizA, (valor, linha, coluna) => valor * matrizB.conteudo[linha][coluna])
+    static hadamard(first, second) {
+        return Matrix.map(first, (value, row, column) => value * second.content[row][column])
     }
 
-    static escalarMultiplicar(matriz, escalar) {
-        return Matriz.mapear(matriz, valor => valor * escalar)
+    static scalarMultiply(matrix, scalar) {
+        return Matrix.map(matrix, value => value * scalar)
     }
 
-    static transpor(matriz) {
-        return new Matriz(matriz.colunas, matriz.linhas).mapear((valor, linha, coluna) => {
-            return matriz.conteudo[coluna][linha]
+    static transpose(matrix) {
+        return new Matrix(matrix.columns, matrix.rows).map((value, row, column) => {
+            return matrix.content[column][row]
         })
     }
 
-    static multiplicar(matrizA, matrizB) {
-        return new Matriz(matrizA.linhas, matrizB.colunas).mapear((valor, linha, coluna) => {
-            let soma = 0
+    static multiply(first, second) {
+        return new Matrix(first.rows, second.columns).map((value, row, column) => {
+            let sum = 0
 
-            for (let indice = 0; indice < matrizA.colunas; indice += 1) {
-                soma += matrizA.conteudo[linha][indice] * matrizB.conteudo[indice][coluna]
+            for (let index = 0; index < first.columns; index += 1) {
+                sum += first.content[row][index] * second.content[index][column]
             }
 
-            return soma
+            return sum
         })
     }
 
-    aleatorizar(geradorAleatorio = Math.random) {
-        return this.mapear(() => geradorAleatorio() * 2 - 1)
+    randomize(random = Math.random) {
+        return this.map(() => random() * 2 - 1)
     }
 
     toJSON() {
         return {
-            linhas: this.linhas,
-            colunas: this.colunas,
-            conteudo: this.conteudo,
+            rows: this.rows,
+            columns: this.columns,
+            content: this.content,
         }
     }
 
     static fromJSON(json) {
-        return new Matriz(json.linhas, json.colunas, json.conteudo)
+        return new Matrix(json.rows, json.columns, json.content)
     }
 }

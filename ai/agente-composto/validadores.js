@@ -1,63 +1,63 @@
 /* istanbul ignore file -- model orchestration is smoke-tested; generated policy coverage is not line-gated. */
-const BUILD_LIMIT_TYPES = ['cover', 'taraque', 'per', 'hef', 'tujai']
+const BUILD_LIMIT_TYPES = ['mine', 'library', 'archer', 'catapult', 'barracks']
 
-export function criarComandoParaAcao(acao, state, playerId, opcoes = {}) {
-    if (acao === 'capture') {
-        return criarComandoCaptura(state, playerId, opcoes.heatmap)
+export function createCommandForAction(action, state, playerId, options = {}) {
+    if (action === 'capture') {
+        return createCaptureCommand(state, playerId, options.heatmap)
     }
 
-    if (acao === 'build-cover') {
-        return criarComandoConstrucao(state, playerId, 'cover', opcoes.heatmap)
+    if (action === 'build-mine') {
+        return createBuildCommand(state, playerId, 'mine', options.heatmap)
     }
 
-    if (acao === 'build-taraque') {
-        return criarComandoConstrucao(state, playerId, 'taraque', opcoes.heatmap)
+    if (action === 'build-library') {
+        return createBuildCommand(state, playerId, 'library', options.heatmap)
     }
 
-    if (acao === 'build-per') {
-        return criarComandoConstrucao(state, playerId, 'per', opcoes.heatmap)
+    if (action === 'build-archer') {
+        return createBuildCommand(state, playerId, 'archer', options.heatmap)
     }
 
-    if (acao === 'build-hef') {
-        return criarComandoConstrucao(state, playerId, 'hef', opcoes.heatmap)
+    if (action === 'build-catapult') {
+        return createBuildCommand(state, playerId, 'catapult', options.heatmap)
     }
 
-    if (acao === 'build-tujai') {
-        return criarComandoConstrucao(state, playerId, 'tujai', opcoes.heatmap)
+    if (action === 'build-barracks') {
+        return createBuildCommand(state, playerId, 'barracks', options.heatmap)
     }
 
-    if (acao === 'upgrade-base') {
-        return criarComandoUpgrade(state, playerId, opcoes.heatmap, ['base'])
+    if (action === 'upgrade-castle') {
+        return createUpgradeCommand(state, playerId, options.heatmap, ['castle'])
     }
 
-    if (acao === 'upgrade') {
-        return criarComandoUpgrade(state, playerId, opcoes.heatmap)
+    if (action === 'upgrade') {
+        return createUpgradeCommand(state, playerId, options.heatmap)
     }
 
-    if (acao === 'research-per') {
-        return criarComandoPesquisa(state, playerId, 'per')
+    if (action === 'research-archer') {
+        return createResearchCommand(state, playerId, 'archer')
     }
 
-    if (acao === 'research-hef') {
-        return criarComandoPesquisa(state, playerId, 'hef')
+    if (action === 'research-catapult') {
+        return createResearchCommand(state, playerId, 'catapult')
     }
 
-    if (acao === 'research-tujai') {
-        return criarComandoPesquisa(state, playerId, 'tujai')
+    if (action === 'research-barracks') {
+        return createResearchCommand(state, playerId, 'barracks')
     }
 
-    if (acao === 'spawn-zunim') {
-        return criarComandoZunim(state, playerId)
+    if (action === 'spawn-soldier') {
+        return createSoldierCommand(state, playerId)
     }
 
-    if (acao === 'scout') {
-        return criarComandoScout(state, playerId, opcoes.heatmap)
+    if (action === 'scout') {
+        return createScoutCommand(state, playerId, options.heatmap)
     }
 
     return null
 }
 
-export function criarComandoCaptura(state, playerId, heatmap = null, filtro = {}) {
+export function createCaptureCommand(state, playerId, heatmap = null, filter = {}) {
     const player = state.players?.[playerId]
 
     if (!player || player.order?.type === 'capture' || player.respawnAt || !player.alive) {
@@ -65,7 +65,7 @@ export function criarComandoCaptura(state, playerId, heatmap = null, filtro = {}
     }
 
     const targets = getCapturableTargets(state, playerId)
-        .filter(target => !filtro.type || target.type === filtro.type)
+        .filter(target => !filter.type || target.type === filter.type)
 
     if (!targets.length) {
         return null
@@ -81,11 +81,11 @@ export function criarComandoCaptura(state, playerId, heatmap = null, filtro = {}
     }
 }
 
-export function criarComandoConstrucao(state, playerId, structureType, heatmap = null) {
+export function createBuildCommand(state, playerId, structureType, heatmap = null) {
     const player = state.players?.[playerId]
     const catalog = state.catalog?.structures?.[structureType]
 
-    if (!player || !catalog || player.coal < catalog.cost || !canBuild(state, player, structureType)) {
+    if (!player || !catalog || player.gold < catalog.cost || !canBuild(state, player, structureType)) {
         return null
     }
 
@@ -103,28 +103,28 @@ export function criarComandoConstrucao(state, playerId, structureType, heatmap =
     }
 }
 
-export function criarComandoUpgrade(state, playerId, heatmap = null, allowedTypes = null) {
+export function createUpgradeCommand(state, playerId, heatmap = null, allowedTypes = null) {
     const player = state.players?.[playerId]
 
     if (!player) {
         return null
     }
 
-    const isBaseOnly = Array.isArray(allowedTypes) && allowedTypes.length === 1 && allowedTypes[0] === 'base'
+    const isBaseOnly = Array.isArray(allowedTypes) && allowedTypes.length === 1 && allowedTypes[0] === 'castle'
 
-    if (isBaseOnly && !state.catalog?.limits?.baseUpgrade?.ready) {
+    if (isBaseOnly && !state.catalog?.limits?.castleUpgrade?.ready) {
         return null
     }
 
     const targets = getUpgradeableTargets(state, playerId)
         .filter(structure => !allowedTypes || allowedTypes.includes(structure.type))
-        .filter(structure => player.coal >= getUpgradeCost(state, structure))
+        .filter(structure => player.gold >= getUpgradeCost(state, structure))
 
     if (!targets.length) {
         return null
     }
 
-    const gate = state.catalog?.limits?.baseUpgrade
+    const gate = state.catalog?.limits?.castleUpgrade
     const context = {
         cappedTypes: countCappedTypes(state),
         gateClosed: gate ? !gate.ready : false,
@@ -141,15 +141,15 @@ export function criarComandoUpgrade(state, playerId, heatmap = null, allowedType
     }
 }
 
-export function criarComandoPesquisa(state, playerId, recipe) {
+export function createResearchCommand(state, playerId, recipe) {
     const player = state.players?.[playerId]
     const research = state.catalog?.research?.[recipe]
 
-    if (!player || !research || player.unlocked?.[recipe] || player.knowledge < research.cost) {
+    if (!player || !research || player.unlocked?.[recipe] || player.wisdom < research.cost) {
         return null
     }
 
-    if (highestStructureLevel(state, playerId, 'taraque') < research.requiresTaraqueLevel) {
+    if (highestStructureLevel(state, playerId, 'library') < research.requiresLibraryLevel) {
         return null
     }
 
@@ -159,25 +159,25 @@ export function criarComandoPesquisa(state, playerId, recipe) {
     }
 }
 
-export function criarComandoZunim(state, playerId) {
+export function createSoldierCommand(state, playerId) {
     const player = state.players?.[playerId]
-    const npc = state.catalog?.npcs?.zunim
+    const npc = state.catalog?.npcs?.soldier
 
-    if (!player || !npc || !player.unlocked?.tujai || player.coal < npc.cost) {
+    if (!player || !npc || !player.unlocked?.barracks || player.gold < npc.cost) {
         return null
     }
 
-    if (highestStructureLevel(state, playerId, 'tujai') <= 0) {
+    if (highestStructureLevel(state, playerId, 'barracks') <= 0) {
         return null
     }
 
     return {
         action: 'spawn-npc',
-        npcType: 'zunim',
+        npcType: 'soldier',
     }
 }
 
-export function criarComandoScout(state, playerId, heatmap = null) {
+export function createScoutCommand(state, playerId, heatmap = null) {
     const player = state.players?.[playerId]
 
     if (!player || !player.alive || player.respawnAt) {
@@ -191,7 +191,7 @@ export function criarComandoScout(state, playerId, heatmap = null) {
     }
 
     return {
-        action: 'move-capturer-to',
+        action: 'move-herald-to',
         x: tile.x,
         y: tile.y,
     }
@@ -247,7 +247,7 @@ export function getBuildCandidates(state, playerId, structureType) {
     const anchors = Object.values(state.structures || {})
         .filter(structure => structure.ownerId === playerId && !structure.disabled)
     const buildRange = state.config?.buildRange ?? 0
-    const enemyBase = getNearestEnemyBase(state, playerId, getPlayerOrigin(state, playerId))
+    const enemyCastle = getNearestEnemyCastle(state, playerId, getPlayerOrigin(state, playerId))
     const candidates = []
 
     if (!player || !anchors.length) {
@@ -265,7 +265,7 @@ export function getBuildCandidates(state, playerId, structureType) {
 
                 candidates.push({
                     ...tile,
-                    score: getBuildTileScore(structureType, tile, anchor, enemyBase),
+                    score: getBuildTileScore(structureType, tile, anchor, enemyCastle),
                 })
             }
         }
@@ -274,19 +274,19 @@ export function getBuildCandidates(state, playerId, structureType) {
     return candidates
 }
 
-export function getBuildTileScore(structureType, tile, anchor, enemyBase) {
+export function getBuildTileScore(structureType, tile, anchor, enemyCastle) {
     const anchorDistance = distance(tile, anchor)
 
-    if (enemyBase && ['per', 'hef'].includes(structureType)) {
-        return distance(tile, enemyBase) + anchorDistance * 0.15
+    if (enemyCastle && ['archer', 'catapult'].includes(structureType)) {
+        return distance(tile, enemyCastle) + anchorDistance * 0.15
     }
 
-    if (enemyBase && structureType === 'cover') {
-        return Math.abs(anchorDistance - 2) + distance(tile, enemyBase) * 0.02
+    if (enemyCastle && structureType === 'mine') {
+        return Math.abs(anchorDistance - 2) + distance(tile, enemyCastle) * 0.02
     }
 
-    if (enemyBase && structureType === 'tujai') {
-        return distance(tile, enemyBase) * 0.5 + Math.abs(anchorDistance - 3)
+    if (enemyCastle && structureType === 'barracks') {
+        return distance(tile, enemyCastle) * 0.5 + Math.abs(anchorDistance - 3)
     }
 
     return Math.abs(anchorDistance - 2)
@@ -305,13 +305,13 @@ export function canBuild(state, player, type) {
         return false
     }
 
-    if (type === 'cover') {
+    if (type === 'mine') {
         return true
     }
 
-    if (catalog.requiresBaseLevel) {
-        const base = state.structures?.[player.baseId]
-        return Boolean(base && base.level >= catalog.requiresBaseLevel)
+    if (catalog.requiresCastleLevel) {
+        const castle = state.structures?.[player.castleId]
+        return Boolean(castle && castle.level >= catalog.requiresCastleLevel)
     }
 
     if (catalog.requiresResearch) {
@@ -322,30 +322,30 @@ export function canBuild(state, player, type) {
 }
 
 export function getUpgradeableTargets(state, playerId) {
-    const base = getOwnBase(state, playerId)
-    const baseLevel = base ? base.level : 0
+    const castle = getOwnCastle(state, playerId)
+    const castleLevel = castle ? castle.level : 0
 
     return Object.values(state.structures || {})
         .filter(structure => structure.ownerId === playerId && !structure.disabled)
-        .filter(structure => structure.type === 'base' || structure.level < baseLevel)
+        .filter(structure => structure.type === 'castle' || structure.level < castleLevel)
 }
 
-export function getOwnBase(state, playerId) {
+export function getOwnCastle(state, playerId) {
     const player = state.players?.[playerId]
-    return state.structures?.[player?.baseId] || Object.values(state.structures || {})
-        .find(structure => structure.ownerId === playerId && structure.type === 'base') || null
+    return state.structures?.[player?.castleId] || Object.values(state.structures || {})
+        .find(structure => structure.ownerId === playerId && structure.type === 'castle') || null
 }
 
 export function getUpgradePriority(structure, context = {}) {
-    if (structure.type === 'base' && context.cappedTypes > 0) {
+    if (structure.type === 'castle' && context.cappedTypes > 0) {
         return -1
     }
 
-    if (context.gateClosed && structure.type !== 'base' && structure.level < (context.averageLevel ?? 0)) {
+    if (context.gateClosed && structure.type !== 'castle' && structure.level < (context.averageLevel ?? 0)) {
         return -2
     }
 
-    const priorities = { base: 0, per: 1, hef: 2, cover: 3, taraque: 4, tujai: 5 }
+    const priorities = { castle: 0, archer: 1, catapult: 2, mine: 3, library: 4, barracks: 5 }
     return priorities[structure.type] ?? 10
 }
 
@@ -369,25 +369,25 @@ export function getUpgradeCost(state, structure) {
     return Math.round((cost || 0) * (1.5 ** structure.level))
 }
 
-export function getNearestEnemyBase(state, playerId, origin) {
-    const visibleBases = Object.values(state.structures || {})
-        .filter(structure => structure.type === 'base')
+export function getNearestEnemyCastle(state, playerId, origin) {
+    const visibleCastles = Object.values(state.structures || {})
+        .filter(structure => structure.type === 'castle')
         .filter(structure => structure.ownerId !== playerId)
         .filter(structure => !structure.disabled)
-    const rememberedBases = Object.values(state.memory?.structures || {})
-        .filter(structure => structure.type === 'base')
+    const rememberedCastles = Object.values(state.memory?.structures || {})
+        .filter(structure => structure.type === 'castle')
         .filter(structure => structure.ownerId !== playerId)
         .filter(structure => !structure.disabled)
-    const bases = [...visibleBases, ...rememberedBases]
+    const castles = [...visibleCastles, ...rememberedCastles]
 
-    bases.sort((first, second) => distance(origin, first) - distance(origin, second))
+    castles.sort((first, second) => distance(origin, first) - distance(origin, second))
 
-    return bases[0] || null
+    return castles[0] || null
 }
 
 export function getPlayerOrigin(state, playerId) {
     const player = state.players?.[playerId]
-    return state.structures?.[player?.baseId] || player || { x: 0, y: 0 }
+    return state.structures?.[player?.castleId] || player || { x: 0, y: 0 }
 }
 
 export function isOccupied(state, x, y) {
@@ -462,12 +462,12 @@ export const __validadoresTestables = {
     getBuildTileScore,
     canBuild,
     getUpgradeableTargets,
-    getOwnBase,
+    getOwnCastle,
     getUpgradePriority,
     countCappedTypes,
     highestStructureLevel,
     getUpgradeCost,
-    getNearestEnemyBase,
+    getNearestEnemyCastle,
     getPlayerOrigin,
     isOccupied,
     isAvatarAvailable,

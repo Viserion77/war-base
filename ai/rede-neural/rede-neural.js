@@ -1,105 +1,105 @@
-import Matriz from './matriz.js'
+import Matrix from './matriz.js'
 
-function sigmoid(valor) {
-    return 1 / (1 + Math.exp(-valor))
+function sigmoid(value) {
+    return 1 / (1 + Math.exp(-value))
 }
 
-function sigmoidDerivada(valor) {
-    return valor * (1 - valor)
+function sigmoidDerivative(value) {
+    return value * (1 - value)
 }
 
-export default class RedeNeural {
-    constructor(neuroniosEntrada, neuroniosOcultos, neuroniosSaida, opcoes = {}) {
-        this.neuroniosEntrada = neuroniosEntrada
-        this.neuroniosOcultos = neuroniosOcultos
-        this.neuroniosSaida = neuroniosSaida
-        this.taxaAprendizado = opcoes.taxaAprendizado ?? 0.1
+export default class NeuralNetwork {
+    constructor(inputNeurons, hiddenNeurons, outputNeurons, options = {}) {
+        this.inputNeurons = inputNeurons
+        this.hiddenNeurons = hiddenNeurons
+        this.outputNeurons = outputNeurons
+        this.learningRate = options.learningRate ?? 0.1
 
-        const aleatorio = opcoes.aleatorio || Math.random
+        const random = options.random || Math.random
 
-        this.biasEntradaOculta = new Matriz(neuroniosOcultos, 1).aleatorizar(aleatorio)
-        this.biasOcultaSaida = new Matriz(neuroniosSaida, 1).aleatorizar(aleatorio)
-        this.pesosEntradaOculta = new Matriz(neuroniosOcultos, neuroniosEntrada).aleatorizar(aleatorio)
-        this.pesosOcultaSaida = new Matriz(neuroniosSaida, neuroniosOcultos).aleatorizar(aleatorio)
+        this.inputHiddenBias = new Matrix(hiddenNeurons, 1).randomize(random)
+        this.hiddenOutputBias = new Matrix(outputNeurons, 1).randomize(random)
+        this.inputHiddenWeights = new Matrix(hiddenNeurons, inputNeurons).randomize(random)
+        this.hiddenOutputWeights = new Matrix(outputNeurons, hiddenNeurons).randomize(random)
     }
 
-    treinar(arrayEntrada, arrayResposta) {
-        const entrada = Matriz.arrayParaMatriz(arrayEntrada)
-        const oculta = Matriz
-            .adicionar(Matriz.multiplicar(this.pesosEntradaOculta, entrada), this.biasEntradaOculta)
-            .mapear(sigmoid)
-        const saida = Matriz
-            .adicionar(Matriz.multiplicar(this.pesosOcultaSaida, oculta), this.biasOcultaSaida)
-            .mapear(sigmoid)
+    train(inputArray, targetArray) {
+        const input = Matrix.fromArray(inputArray)
+        const hidden = Matrix
+            .add(Matrix.multiply(this.inputHiddenWeights, input), this.inputHiddenBias)
+            .map(sigmoid)
+        const output = Matrix
+            .add(Matrix.multiply(this.hiddenOutputWeights, hidden), this.hiddenOutputBias)
+            .map(sigmoid)
 
-        const resposta = Matriz.arrayParaMatriz(arrayResposta)
-        const erroSaida = Matriz.subtrair(resposta, saida)
-        const gradienteSaida = Matriz.escalarMultiplicar(
-            Matriz.hadamard(Matriz.mapear(saida, sigmoidDerivada), erroSaida),
-            this.taxaAprendizado,
+        const target = Matrix.fromArray(targetArray)
+        const outputError = Matrix.subtract(target, output)
+        const outputGradient = Matrix.scalarMultiply(
+            Matrix.hadamard(Matrix.map(output, sigmoidDerivative), outputError),
+            this.learningRate,
         )
 
-        const deltaPesosOcultaSaida = Matriz.multiplicar(gradienteSaida, Matriz.transpor(oculta))
-        const pesosOcultaSaidaAntes = this.pesosOcultaSaida
+        const hiddenOutputWeightDelta = Matrix.multiply(outputGradient, Matrix.transpose(hidden))
+        const previousHiddenOutputWeights = this.hiddenOutputWeights
 
-        this.pesosOcultaSaida = Matriz.adicionar(this.pesosOcultaSaida, deltaPesosOcultaSaida)
-        this.biasOcultaSaida = Matriz.adicionar(this.biasOcultaSaida, gradienteSaida)
+        this.hiddenOutputWeights = Matrix.add(this.hiddenOutputWeights, hiddenOutputWeightDelta)
+        this.hiddenOutputBias = Matrix.add(this.hiddenOutputBias, outputGradient)
 
-        const erroOculta = Matriz.multiplicar(Matriz.transpor(pesosOcultaSaidaAntes), erroSaida)
-        const gradienteOculta = Matriz.escalarMultiplicar(
-            Matriz.hadamard(Matriz.mapear(oculta, sigmoidDerivada), erroOculta),
-            this.taxaAprendizado,
+        const hiddenError = Matrix.multiply(Matrix.transpose(previousHiddenOutputWeights), outputError)
+        const hiddenGradient = Matrix.scalarMultiply(
+            Matrix.hadamard(Matrix.map(hidden, sigmoidDerivative), hiddenError),
+            this.learningRate,
         )
 
-        this.pesosEntradaOculta = Matriz.adicionar(
-            this.pesosEntradaOculta,
-            Matriz.multiplicar(gradienteOculta, Matriz.transpor(entrada)),
+        this.inputHiddenWeights = Matrix.add(
+            this.inputHiddenWeights,
+            Matrix.multiply(hiddenGradient, Matrix.transpose(input)),
         )
-        this.biasEntradaOculta = Matriz.adicionar(this.biasEntradaOculta, gradienteOculta)
+        this.inputHiddenBias = Matrix.add(this.inputHiddenBias, hiddenGradient)
     }
 
-    prever(arrayEntrada) {
-        const entrada = Matriz.arrayParaMatriz(arrayEntrada)
-        const oculta = Matriz
-            .adicionar(Matriz.multiplicar(this.pesosEntradaOculta, entrada), this.biasEntradaOculta)
-            .mapear(sigmoid)
-        const saida = Matriz
-            .adicionar(Matriz.multiplicar(this.pesosOcultaSaida, oculta), this.biasOcultaSaida)
-            .mapear(sigmoid)
+    predict(inputArray) {
+        const input = Matrix.fromArray(inputArray)
+        const hidden = Matrix
+            .add(Matrix.multiply(this.inputHiddenWeights, input), this.inputHiddenBias)
+            .map(sigmoid)
+        const output = Matrix
+            .add(Matrix.multiply(this.hiddenOutputWeights, hidden), this.hiddenOutputBias)
+            .map(sigmoid)
 
-        return Matriz.matrizParaArray(saida)
+        return Matrix.toArray(output)
     }
 
     toJSON() {
         return {
-            tipo: 'war-base-rede-neural',
-            neuroniosEntrada: this.neuroniosEntrada,
-            neuroniosOcultos: this.neuroniosOcultos,
-            neuroniosSaida: this.neuroniosSaida,
-            taxaAprendizado: this.taxaAprendizado,
-            pesosEntradaOculta: this.pesosEntradaOculta.toJSON(),
-            pesosOcultaSaida: this.pesosOcultaSaida.toJSON(),
-            biasEntradaOculta: this.biasEntradaOculta.toJSON(),
-            biasOcultaSaida: this.biasOcultaSaida.toJSON(),
+            type: 'war-base-neural-network',
+            inputNeurons: this.inputNeurons,
+            hiddenNeurons: this.hiddenNeurons,
+            outputNeurons: this.outputNeurons,
+            learningRate: this.learningRate,
+            inputHiddenWeights: this.inputHiddenWeights.toJSON(),
+            hiddenOutputWeights: this.hiddenOutputWeights.toJSON(),
+            inputHiddenBias: this.inputHiddenBias.toJSON(),
+            hiddenOutputBias: this.hiddenOutputBias.toJSON(),
         }
     }
 
     static fromJSON(json) {
-        const rede = new RedeNeural(json.neuroniosEntrada, json.neuroniosOcultos, json.neuroniosSaida, {
-            taxaAprendizado: json.taxaAprendizado,
-            aleatorio: () => 0,
+        const network = new NeuralNetwork(json.inputNeurons, json.hiddenNeurons, json.outputNeurons, {
+            learningRate: json.learningRate,
+            random: () => 0,
         })
 
-        rede.pesosEntradaOculta = Matriz.fromJSON(json.pesosEntradaOculta)
-        rede.pesosOcultaSaida = Matriz.fromJSON(json.pesosOcultaSaida)
-        rede.biasEntradaOculta = Matriz.fromJSON(json.biasEntradaOculta)
-        rede.biasOcultaSaida = Matriz.fromJSON(json.biasOcultaSaida)
+        network.inputHiddenWeights = Matrix.fromJSON(json.inputHiddenWeights)
+        network.hiddenOutputWeights = Matrix.fromJSON(json.hiddenOutputWeights)
+        network.inputHiddenBias = Matrix.fromJSON(json.inputHiddenBias)
+        network.hiddenOutputBias = Matrix.fromJSON(json.hiddenOutputBias)
 
-        return rede
+        return network
     }
 }
 
-export const ativacoes = {
+export const activations = {
     sigmoid,
-    sigmoidDerivada,
+    sigmoidDerivative,
 }

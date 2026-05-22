@@ -1,3 +1,32 @@
+import { getLang, t } from './i18n/index.js'
+
+const STRUCTURE_SPRITE_SIZE = 64
+const STRUCTURE_SPRITE_FRAMES = {
+    castle: 0,
+    mine: 1,
+    library: 2,
+    archer: 3,
+    catapult: 4,
+    barracks: 5,
+}
+const renderAssets = {
+    structureSpriteSheet: createImageAsset('/img/icons_game.png'),
+}
+
+export function preloadRenderAssets() {
+    return renderAssets
+}
+
+function createImageAsset(src) {
+    if (typeof Image === 'undefined') {
+        return null
+    }
+
+    const image = new Image()
+    image.src = src
+    return image
+}
+
 export function setupScreen(canvas, game) {
     const { screen: { width, height, pixelsPerFields } } = game.state
     canvas.width = width * pixelsPerFields
@@ -8,7 +37,7 @@ export function setupScreen(canvas, game) {
     }
 
     if (canvas.setAttribute) {
-        canvas.setAttribute('aria-label', 'Mapa da partida com ' + width + ' por ' + height + ' campos')
+        canvas.setAttribute('aria-label', t('canvas.mapLabel', { width, height }))
     }
 }
 
@@ -222,18 +251,20 @@ function drawStructure(context, game, structure, remembered = false) {
     context.strokeStyle = '#25221f'
     context.fillStyle = color
 
-    if (structure.type === 'base') {
-        drawBase(context, x + padding, y + padding, size, color)
-    } else if (structure.type === 'cover') {
-        drawCover(context, x + padding, y + padding, size, color)
-    } else if (structure.type === 'taraque') {
-        drawTaraque(context, x + padding, y + padding, size, color)
-    } else if (structure.type === 'per') {
-        drawPer(context, x + padding, y + padding, size, color)
-    } else if (structure.type === 'hef') {
-        drawHef(context, x + padding, y + padding, size, color)
-    } else if (structure.type === 'tujai') {
-        drawTujai(context, x + padding, y + padding, size, color)
+    if (!drawStructureSprite(context, structure.type, x + padding, y + padding, size, color)) {
+        if (structure.type === 'castle') {
+            drawCastle(context, x + padding, y + padding, size, color)
+        } else if (structure.type === 'mine') {
+            drawMine(context, x + padding, y + padding, size, color)
+        } else if (structure.type === 'library') {
+            drawLibrary(context, x + padding, y + padding, size, color)
+        } else if (structure.type === 'archer') {
+            drawArcher(context, x + padding, y + padding, size, color)
+        } else if (structure.type === 'catapult') {
+            drawCatapult(context, x + padding, y + padding, size, color)
+        } else if (structure.type === 'barracks') {
+            drawBarracks(context, x + padding, y + padding, size, color)
+        }
     }
 
     if (!remembered && structure.disabled) {
@@ -254,7 +285,41 @@ function drawStructure(context, game, structure, remembered = false) {
     context.restore()
 }
 
-function drawBase(context, x, y, size, color) {
+function drawStructureSprite(context, type, x, y, size, color) {
+    const frame = STRUCTURE_SPRITE_FRAMES[type]
+    const spriteSheet = renderAssets.structureSpriteSheet
+
+    if (frame === undefined || !isImageReady(spriteSheet) || typeof context.drawImage !== 'function') {
+        return false
+    }
+
+    context.save()
+    context.fillStyle = color
+    context.fillRect(x, y, size, size)
+    context.drawImage(
+        spriteSheet,
+        frame * STRUCTURE_SPRITE_SIZE,
+        0,
+        STRUCTURE_SPRITE_SIZE,
+        STRUCTURE_SPRITE_SIZE,
+        x,
+        y,
+        size,
+        size,
+    )
+    context.restore()
+    return true
+}
+
+function isImageReady(image) {
+    return Boolean(image && image.complete && image.naturalWidth !== 0)
+}
+
+function setRenderAssetsForTests(assets = {}) {
+    renderAssets.structureSpriteSheet = assets.structureSpriteSheet || null
+}
+
+function drawCastle(context, x, y, size, color) {
     context.fillStyle = color
     context.fillRect(x, y + size * 0.25, size, size * 0.75)
     context.fillRect(x + size * 0.12, y, size * 0.18, size * 0.32)
@@ -263,7 +328,7 @@ function drawBase(context, x, y, size, color) {
     context.strokeRect(x, y + size * 0.25, size, size * 0.75)
 }
 
-function drawCover(context, x, y, size, color) {
+function drawMine(context, x, y, size, color) {
     context.fillStyle = color
     context.beginPath()
     context.moveTo(x + size * 0.5, y)
@@ -277,7 +342,7 @@ function drawCover(context, x, y, size, color) {
     context.fillRect(x + size * 0.36, y + size * 0.36, size * 0.28, size * 0.28)
 }
 
-function drawTaraque(context, x, y, size, color) {
+function drawLibrary(context, x, y, size, color) {
     context.fillStyle = color
     context.beginPath()
     context.moveTo(x + size * 0.2, y + size)
@@ -291,7 +356,7 @@ function drawTaraque(context, x, y, size, color) {
     context.fillRect(x + size * 0.34, y + size * 0.55, size * 0.32, size * 0.18)
 }
 
-function drawPer(context, x, y, size, color) {
+function drawArcher(context, x, y, size, color) {
     context.fillStyle = color
     context.fillRect(x + size * 0.2, y + size * 0.55, size * 0.6, size * 0.28)
     context.fillRect(x + size * 0.42, y + size * 0.2, size * 0.16, size * 0.45)
@@ -303,7 +368,7 @@ function drawPer(context, x, y, size, color) {
     context.stroke()
 }
 
-function drawHef(context, x, y, size, color) {
+function drawCatapult(context, x, y, size, color) {
     context.fillStyle = color
     context.beginPath()
     context.arc(x + size * 0.5, y + size * 0.55, size * 0.32, 0, Math.PI * 2)
@@ -315,7 +380,7 @@ function drawHef(context, x, y, size, color) {
     context.fill()
 }
 
-function drawTujai(context, x, y, size, color) {
+function drawBarracks(context, x, y, size, color) {
     context.fillStyle = color
     context.fillRect(x + size * 0.12, y + size * 0.35, size * 0.76, size * 0.58)
     context.beginPath()
@@ -377,7 +442,7 @@ function drawUnits(context, game) {
         context.stroke()
         context.fillStyle = '#f6f0d8'
 
-        if (unit.type === 'capturer') {
+        if (unit.type === 'herald') {
             context.beginPath()
             context.moveTo(x, y - radius * 0.62)
             context.lineTo(x + radius * 0.54, y + radius * 0.46)
@@ -477,6 +542,32 @@ function drawPlayers(context, game, currentPlayerId) {
     }
 }
 
+function structureLabel(type) {
+    return translatedLabel('structure.' + type + '.label', type)
+}
+
+function researchLabel(type) {
+    return translatedLabel('research.' + type + '.label', type)
+}
+
+function unitLabel(type) {
+    return translatedLabel('unit.' + type + '.label', type)
+}
+
+function translatedLabel(key, fallback) {
+    const value = t(key)
+    return value === key ? formatFallbackLabel(fallback) : value
+}
+
+function formatFallbackLabel(value) {
+    const text = String(value || '')
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
+}
+
+function currentLocale() {
+    return getLang() === 'en' ? 'en-US' : 'pt-BR'
+}
+
 function updateHud(hud, game, currentPlayerId, uiState) {
     if (!hud) {
         return
@@ -498,50 +589,50 @@ function updateHud(hud, game, currentPlayerId, uiState) {
 
     const hudHtml = `
         <section class="panel room-panel">
-            <div class="panel-title">Sala ${escapeHtml(game.state.hostKey)}</div>
-            ${winner ? `<div class="winner">Vencedor: ${escapeHtml(winner.gamerTag)}</div>` : ''}
+            <div class="panel-title">${t('lobby.room')} ${escapeHtml(game.state.hostKey)}</div>
+            ${winner ? `<div class="winner">${t('hud.winner', { name: escapeHtml(winner.gamerTag) })}</div>` : ''}
             <div class="resource-grid">
-                <span><b>${formatNumber(currentPlayer.coal)}</b><small>Carvao</small></span>
-                <span><b>${formatNumber(currentPlayer.knowledge)}</b><small>Conhecimento</small></span>
-                <span><b>${currentPlayer.alive ? 'Ativa' : 'Fora'}</b><small>Base</small></span>
-                <span><b>${playerStatusLabel(currentPlayer)}</b><small>Unidade</small></span>
-                <span><b>${formatNumber(getPlayerStructureCount(game.state, currentPlayerId))}</b><small>Estruturas</small></span>
-                <span><b>${formatNumber(getPlayerUnitCount(game.state, currentPlayerId))}</b><small>Unidades</small></span>
+                <span><b>${formatNumber(currentPlayer.gold)}</b><small>${t('hud.resource.gold')}</small></span>
+                <span><b>${formatNumber(currentPlayer.wisdom)}</b><small>${t('hud.resource.wisdom')}</small></span>
+                <span><b>${currentPlayer.alive ? t('hud.alive') : t('hud.dead')}</b><small>${t('hud.castle')}</small></span>
+                <span><b>${playerStatusLabel(currentPlayer)}</b><small>${t('hud.unit')}</small></span>
+                <span><b>${formatNumber(getPlayerStructureCount(game.state, currentPlayerId))}</b><small>${t('hud.structures')}</small></span>
+                <span><b>${formatNumber(getPlayerUnitCount(game.state, currentPlayerId))}</b><small>${t('hud.units')}</small></span>
             </div>
             ${captureStatusPanel(captureStatus)}
-            ${baseUpgradeGatePanel(game, currentPlayerId)}
+            ${castleUpgradeGatePanel(game, currentPlayerId)}
         </section>
         <section class="panel">
-            <div class="panel-title">Construcoes</div>
+            <div class="panel-title">${t('hud.build')}</div>
             <div class="button-grid">
-                ${buildButton(game, currentPlayer, uiState, 'cover')}
-                ${buildButton(game, currentPlayer, uiState, 'taraque')}
-                ${buildButton(game, currentPlayer, uiState, 'per')}
-                ${buildButton(game, currentPlayer, uiState, 'hef')}
-                ${buildButton(game, currentPlayer, uiState, 'tujai')}
+                ${buildButton(game, currentPlayer, uiState, 'mine')}
+                ${buildButton(game, currentPlayer, uiState, 'library')}
+                ${buildButton(game, currentPlayer, uiState, 'archer')}
+                ${buildButton(game, currentPlayer, uiState, 'catapult')}
+                ${buildButton(game, currentPlayer, uiState, 'barracks')}
             </div>
         </section>
         <section class="panel">
-            <div class="panel-title">Pesquisa</div>
+            <div class="panel-title">${t('hud.research')}</div>
             <div class="button-grid">
-                ${researchButton(game, currentPlayer, 'per')}
-                ${researchButton(game, currentPlayer, 'hef')}
-                ${researchButton(game, currentPlayer, 'tujai')}
+                ${researchButton(game, currentPlayer, 'archer')}
+                ${researchButton(game, currentPlayer, 'catapult')}
+                ${researchButton(game, currentPlayer, 'barracks')}
             </div>
         </section>
         <section class="panel">
-            <div class="panel-title">Acoes</div>
+            <div class="panel-title">${t('hud.actions')}</div>
             ${autoplayButton(game, currentPlayer)}
             ${selectedPanel(game, currentPlayer, selectedStructure, uiState)}
-            ${npcButton(game, currentPlayer, 'zunim')}
+            ${npcButton(game, currentPlayer, 'soldier')}
         </section>
         <section class="panel">
-            <div class="panel-title">Jogadores</div>
+            <div class="panel-title">${t('hud.players')}</div>
             <div class="players-list">${playersList(game, currentPlayerId)}</div>
             ${addAiButton(game)}
         </section>
         <section class="panel log-panel">
-            <div class="panel-title">Eventos</div>
+            <div class="panel-title">${t('hud.events')}</div>
             <div class="log-list">${logsList(game)}</div>
         </section>
     `
@@ -560,44 +651,49 @@ function captureStatusPanel(captureStatus) {
     return `
         <div class="capture-status">
             <div class="capture-status-header">
-                <span>Capturando ${escapeHtml(captureStatus.label)}</span>
+                <span>${t('hud.capturing', { name: escapeHtml(captureStatus.label) })}</span>
                 <strong>${captureStatus.percent}%</strong>
             </div>
             <div class="capture-meter" aria-hidden="true">
                 <span style="width: ${captureStatus.percent}%"></span>
             </div>
-            <small>${captureStatus.elapsedSeconds}/${captureStatus.totalSeconds}s - ordem ativa ate concluir.</small>
+            <small>${t('hud.captureOrderActiveUntilDone', { elapsed: captureStatus.elapsedSeconds, total: captureStatus.totalSeconds })}</small>
         </div>
     `
 }
 
-function baseUpgradeGatePanel(game, playerId) {
-    const gate = game.state.catalog.limits?.baseUpgrade
+function castleUpgradeGatePanel(game, playerId) {
+    const gate = game.state.catalog.limits?.castleUpgrade
 
     if (!gate) {
         return ''
     }
 
     const player = game.state.players[playerId]
-    const base = player ? game.state.structures[player.baseId] : null
+    const castle = player ? game.state.structures[player.castleId] : null
 
-    if (!base) {
+    if (!castle) {
         return ''
     }
 
     const percent = Math.max(0, Math.min(100, Math.round((gate.averageLevel / Math.max(gate.required, 0.0001)) * 100)))
-    const stateClass = gate.ready ? 'base-gate-ready' : 'base-gate-closed'
+    const stateClass = gate.ready ? 'castle-gate-ready' : 'castle-gate-closed'
     const label = gate.ready
-        ? `Base lvl ${base.level} - pronto para upar`
-        : `Base lvl ${base.level} - media ${gate.averageLevel.toFixed(2)} / ${gate.required.toFixed(2)} (${Math.round(gate.ratio * 100)}%)`
+        ? t('hud.castleReady', { level: castle.level })
+        : t('hud.castleGate', {
+            level: castle.level,
+            avg: gate.averageLevel.toFixed(2),
+            required: gate.required.toFixed(2),
+            ratio: Math.round(gate.ratio * 100),
+        })
 
     return `
-        <div class="base-gate ${stateClass}">
-            <div class="base-gate-header">
+        <div class="castle-gate ${stateClass}">
+            <div class="castle-gate-header">
                 <span>${label}</span>
                 <strong>${percent}%</strong>
             </div>
-            <div class="base-gate-meter" aria-hidden="true">
+            <div class="castle-gate-meter" aria-hidden="true">
                 <span style="width: ${gate.ready ? 100 : percent}%"></span>
             </div>
         </div>
@@ -614,13 +710,12 @@ function getCaptureStatus(game, playerId) {
     }
 
     const structure = captures[0]
-    const catalog = game.state.catalog.structures[structure.type]
     const totalMs = Math.max(1, game.state.config.captureDurationMs || 1)
     const progressMs = Math.min(totalMs, structure.capture.progressMs)
     const percent = Math.min(100, Math.round((progressMs / totalMs) * 100))
 
     return {
-        label: catalog ? catalog.label : structure.type,
+        label: structureLabel(structure.type),
         percent,
         elapsedSeconds: Math.ceil(progressMs / 1000),
         totalSeconds: Math.ceil(totalMs / 1000),
@@ -636,8 +731,9 @@ function buildButton(game, player, uiState, type) {
     const limitClass = getBuildLimitClass(limit)
     const className = 'action-button build-button' + (limitClass ? ' ' + limitClass : '')
     const limitLabel = limit ? `<small class="build-limit">${limit.current}/${limit.max}</small>` : ''
+    const label = structureLabel(type)
 
-    return `<button class="${className}" type="button" data-action="build" data-structure="${type}" aria-label="Construir ${escapeHtml(catalog.label)} por ${catalog.cost} carvoes"${title} ${enabled ? '' : 'disabled'}><span>${catalog.label} ${catalog.cost}</span>${limitLabel}</button>`
+    return `<button class="${className}" type="button" data-action="build" data-structure="${type}" aria-label="${escapeHtml(t('action.buildAria', { name: label, cost: catalog.cost }))}"${title} ${enabled ? '' : 'disabled'}><span>${t('action.build', { name: label, cost: catalog.cost })}</span>${limitLabel}</button>`
 }
 
 function researchButton(game, player, recipe) {
@@ -645,39 +741,42 @@ function researchButton(game, player, recipe) {
     const disabledReason = getResearchDisabledReason(game, player, recipe)
     const enabled = !disabledReason
     const title = disabledReason ? ` title="${escapeHtml(disabledReason)}"` : ''
-    const label = research ? research.label : recipe
-    const cost = research ? ` ${research.cost}` : ''
+    const label = researchLabel(recipe)
+    const cost = research ? research.cost : ''
+    const ariaLabel = research ? t('action.researchAria', { name: label, cost }) : label
+    const buttonLabel = research ? t('action.research', { name: label, cost }) : label
 
-    return `<button class="action-button" type="button" data-action="research" data-recipe="${recipe}" aria-label="Pesquisar ${escapeHtml(label)}${cost ? ' por' + cost + ' conhecimentos' : ''}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
+    return `<button class="action-button" type="button" data-action="research" data-recipe="${recipe}" aria-label="${escapeHtml(ariaLabel)}"${title} ${enabled ? '' : 'disabled'}>${escapeHtml(buttonLabel)}</button>`
 }
 
 function getResearchDisabledReason(game, player, recipe) {
     const research = game.state.catalog.research[recipe]
+    const label = researchLabel(recipe)
 
     if (!research) {
-        return 'Pesquisa indisponivel.'
+        return t('error.researchUnavailable')
     }
 
     if (!player || !player.alive) {
-        return 'Jogador fora da partida.'
+        return t('error.playerOut')
     }
 
     if (player.autoplay) {
-        return 'Autoplay ligado.'
+        return t('error.autoplayOn')
     }
 
     if (player.unlocked[recipe]) {
-        return `${research.label} ja pesquisada.`
+        return t('error.researchDone', { name: label })
     }
 
-    const taraqueLevel = highestStructureLevel(game.state, player.playerId, 'taraque')
+    const libraryLevel = highestStructureLevel(game.state, player.playerId, 'library')
 
-    if (taraqueLevel < research.requiresTaraqueLevel) {
-        return `${research.label} requer Taraque nivel ${research.requiresTaraqueLevel}.`
+    if (libraryLevel < research.requiresLibraryLevel) {
+        return t('error.researchRequiresLibrary', { name: label, level: research.requiresLibraryLevel })
     }
 
-    if (player.knowledge < research.cost) {
-        return `Conhecimento insuficiente: precisa de ${research.cost}.`
+    if (player.wisdom < research.cost) {
+        return t('error.notEnoughWisdom', { cost: research.cost })
     }
 
     return ''
@@ -688,18 +787,20 @@ function npcButton(game, player, npcType) {
     const disabledReason = getSpawnNpcDisabledReason(game, player, npcType)
     const enabled = !disabledReason
     const title = disabledReason ? ` title="${escapeHtml(disabledReason)}"` : ''
-    const label = npc ? npc.label : npcType
-    const cost = npc ? ` ${npc.cost}` : ''
+    const label = unitLabel(npcType)
+    const cost = npc ? npc.cost : ''
+    const ariaLabel = npc ? t('action.sendUnitAria', { name: label, cost }) : label
+    const buttonLabel = npc ? t('action.sendUnit', { name: label, cost }) : label
 
-    return `<button class="action-button" type="button" data-action="spawn-npc" data-npc="${npcType}" aria-label="Enviar ${escapeHtml(label)}${cost ? ' por' + cost + ' carvoes' : ''}"${title} ${enabled ? '' : 'disabled'}>${label}${cost}</button>`
+    return `<button class="action-button" type="button" data-action="spawn-npc" data-npc="${npcType}" aria-label="${escapeHtml(ariaLabel)}"${title} ${enabled ? '' : 'disabled'}>${escapeHtml(buttonLabel)}</button>`
 }
 
 function autoplayButton(game, player) {
     const disabledReason = getAutoplayDisabledReason(game, player)
     const enabled = !disabledReason
     const nextEnabled = !(player && player.autoplay)
-    const label = nextEnabled ? 'Ligar autoplay' : 'Desligar autoplay'
-    const title = disabledReason || (nextEnabled ? 'IA assume seus comandos.' : 'Voltar ao controle manual.')
+    const label = nextEnabled ? t('action.autoplayOn') : t('action.autoplayOff')
+    const title = disabledReason || (nextEnabled ? t('action.autoplayOnTitle') : t('action.autoplayOffTitle'))
     const activeClass = nextEnabled ? '' : ' active'
 
     return '<button class="action-button autoplay-button' + activeClass + '" type="button" data-action="toggle-autoplay" data-enabled="' + String(nextEnabled) + '" title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(label) + '" ' + (enabled ? '' : 'disabled') + '>' + escapeHtml(label) + '</button>'
@@ -707,19 +808,19 @@ function autoplayButton(game, player) {
 
 function getAutoplayDisabledReason(game, player) {
     if (!game.state.hostKey) {
-        return 'Entre em uma sala primeiro.'
+        return t('error.notInRoom')
     }
 
     if (game.state.winnerId) {
-        return 'Partida encerrada.'
+        return t('error.matchEnded')
     }
 
     if (!player || !player.alive) {
-        return 'Jogador fora da partida.'
+        return t('error.playerOut')
     }
 
     if (player.isAi) {
-        return 'IA ja controla este jogador.'
+        return t('error.aiControlsPlayer')
     }
 
     return ''
@@ -728,22 +829,22 @@ function getAutoplayDisabledReason(game, player) {
 function addAiButton(game) {
     const disabledReason = getAddAiDisabledReason(game)
     const enabled = !disabledReason
-    const title = disabledReason || 'Adicionar uma IA neural a esta sala.'
+    const title = disabledReason || t('action.addAiTitle')
 
-    return '<button class="action-button add-ai-button" type="button" data-action="add-ai" title="' + escapeHtml(title) + '" aria-label="Adicionar uma IA neural" ' + (enabled ? '' : 'disabled') + '>Adicionar IA</button>'
+    return '<button class="action-button add-ai-button" type="button" data-action="add-ai" title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(t('action.addAiTitle')) + '" ' + (enabled ? '' : 'disabled') + '>' + escapeHtml(t('action.addAi')) + '</button>'
 }
 
 function getAddAiDisabledReason(game) {
     if (!game.state.hostKey) {
-        return 'Entre em uma sala primeiro.'
+        return t('error.notInRoom')
     }
 
     if (game.state.winnerId) {
-        return 'Partida encerrada.'
+        return t('error.matchEnded')
     }
 
     if (Object.keys(game.state.players || {}).length >= game.state.config.maxPlayersPerRoom) {
-        return 'Sala cheia.'
+        return t('error.roomFull')
     }
 
     return ''
@@ -753,27 +854,27 @@ function getSpawnNpcDisabledReason(game, player, npcType) {
     const npc = game.state.catalog.npcs[npcType]
 
     if (!npc) {
-        return 'NPC indisponivel.'
+        return t('error.npcUnavailable')
     }
 
     if (!player || !player.alive) {
-        return 'Jogador fora da partida.'
+        return t('error.playerOut')
     }
 
     if (player.autoplay) {
-        return 'Autoplay ligado.'
+        return t('error.autoplayOn')
     }
 
-    if (!player.unlocked.tujai) {
-        return 'Pesquise Tujai primeiro.'
+    if (!player.unlocked.barracks) {
+        return t('error.requiresBarracksResearch')
     }
 
-    if (highestStructureLevel(game.state, player.playerId, 'tujai') <= 0) {
-        return 'Construa uma Tujai ativa primeiro.'
+    if (highestStructureLevel(game.state, player.playerId, 'barracks') <= 0) {
+        return t('error.requiresActiveBarracks')
     }
 
-    if (player.coal < npc.cost) {
-        return `Carvao insuficiente: precisa de ${npc.cost}.`
+    if (player.gold < npc.cost) {
+        return t('error.notEnoughGold', { cost: npc.cost })
     }
 
     return ''
@@ -781,7 +882,7 @@ function getSpawnNpcDisabledReason(game, player, npcType) {
 
 function selectedPanel(game, player, selectedStructure, uiState) {
     if (!uiState.selectedTile) {
-        return '<div class="selected-empty">Nenhum terreno</div>'
+        return '<div class="selected-empty">' + escapeHtml(t('hud.noneSelected')) + '</div>'
     }
 
     if (!selectedStructure) {
@@ -789,37 +890,38 @@ function selectedPanel(game, player, selectedStructure, uiState) {
 
         return `
             <div class="selected-empty">
-                <span>Terreno ${uiState.selectedTile.x}, ${uiState.selectedTile.y}</span>
+                <span>${escapeHtml(t('hud.tile', { x: uiState.selectedTile.x, y: uiState.selectedTile.y }))}</span>
                 <span class="tile-status tile-status-${placementStatus.status}">${escapeHtml(placementStatus.message)}</span>
             </div>
         `
     }
 
-    const catalog = game.state.catalog.structures[selectedStructure.type]
+    const catalog = game.state.catalog.structures[selectedStructure.type] || { cost: 0 }
+    const label = structureLabel(selectedStructure.type)
     const owner = selectedStructure.ownerId ? game.state.players[selectedStructure.ownerId] : null
-    const ownerName = owner ? owner.gamerTag : 'Neutro'
+    const ownerName = owner ? owner.gamerTag : t('hud.neutral')
     const upgradeCost = Math.round(catalog.cost * (1.5 ** selectedStructure.level))
-    const base = player ? game.state.structures[player.baseId] : null
-    const baseUpgradeGate = game.state.catalog.limits?.baseUpgrade || null
-    const upgradeDisabledReason = getUpgradeDisabledReason(player, selectedStructure, upgradeCost, base ? base.level : 0, baseUpgradeGate)
+    const castle = player ? game.state.structures[player.castleId] : null
+    const castleUpgradeGate = game.state.catalog.limits?.castleUpgrade || null
+    const upgradeDisabledReason = getUpgradeDisabledReason(player, selectedStructure, upgradeCost, castle ? castle.level : 0, castleUpgradeGate)
     const canUpgrade = !upgradeDisabledReason
     const title = upgradeDisabledReason ? ` title="${escapeHtml(upgradeDisabledReason)}"` : ''
     const captureDisabledReason = getCaptureDisabledReason(game, player, selectedStructure)
     const captureTitle = captureDisabledReason ? ' title="' + escapeHtml(captureDisabledReason) + '"' : ''
     const canCapture = !captureDisabledReason
     const captureButton = catalog.captureable
-        ? '<button class="action-button" type="button" data-action="capture" data-structure-id="' + selectedStructure.structureId + '" aria-label="Iniciar captura de ' + escapeHtml(catalog.label) + '"' + captureTitle + ' ' + (canCapture ? '' : 'disabled') + '>Iniciar captura</button>'
+        ? '<button class="action-button" type="button" data-action="capture" data-structure-id="' + selectedStructure.structureId + '" aria-label="' + escapeHtml(t('action.startCaptureAria', { name: label })) + '"' + captureTitle + ' ' + (canCapture ? '' : 'disabled') + '>' + escapeHtml(t('action.startCapture')) + '</button>'
         : ''
     const orderStatus = player.order && player.order.type === 'capture' && player.order.structureId === selectedStructure.structureId
-        ? '<span class="tile-status tile-status-available">Ordem de captura ativa</span>'
+        ? '<span class="tile-status tile-status-available">' + escapeHtml(t('hud.captureOrderActive')) + '</span>'
         : ''
 
     if (selectedStructure.remembered) {
         return `
             <div class="selected-card remembered-card">
-                <strong>${catalog.label} N${selectedStructure.level}</strong>
+                <strong>${escapeHtml(label)} N${selectedStructure.level}</strong>
                 <span>${escapeHtml(ownerName)}</span>
-                <span class="tile-status tile-status-blocked">Ultimo avistamento</span>
+                <span class="tile-status tile-status-blocked">${escapeHtml(t('hud.lastSeen'))}</span>
                 ${orderStatus}
                 ${captureButton}
             </div>
@@ -828,40 +930,44 @@ function selectedPanel(game, player, selectedStructure, uiState) {
 
     return `
         <div class="selected-card">
-            <strong>${catalog.label} N${selectedStructure.level}</strong>
+            <strong>${escapeHtml(label)} N${selectedStructure.level}</strong>
             <span>${escapeHtml(ownerName)}</span>
-            <span>${formatNumber(Math.max(0, Math.ceil(selectedStructure.integrity)))}/${formatNumber(selectedStructure.maxIntegrity)} HP</span>
-            <span>${formatNumber(Math.max(0, Math.ceil(selectedStructure.barrier)))}/${formatNumber(selectedStructure.maxBarrier)} barreira</span>
+            <span>${formatNumber(Math.max(0, Math.ceil(selectedStructure.integrity)))}/${formatNumber(selectedStructure.maxIntegrity)} ${t('hud.hp')}</span>
+            <span>${formatNumber(Math.max(0, Math.ceil(selectedStructure.barrier)))}/${formatNumber(selectedStructure.maxBarrier)} ${t('hud.barrier')}</span>
             ${orderStatus}
-            <button class="action-button" type="button" data-action="upgrade" data-structure-id="${selectedStructure.structureId}" aria-label="Melhorar ${escapeHtml(catalog.label)} por ${upgradeCost} carvoes"${title} ${canUpgrade ? '' : 'disabled'}>Upgrade ${upgradeCost}</button>
+            <button class="action-button" type="button" data-action="upgrade" data-structure-id="${selectedStructure.structureId}" aria-label="${escapeHtml(t('action.upgradeAria', { name: label, cost: upgradeCost }))}"${title} ${canUpgrade ? '' : 'disabled'}>${escapeHtml(t('action.upgrade'))} ${upgradeCost}</button>
             ${captureButton}
         </div>
     `
 }
 
-function getUpgradeDisabledReason(player, structure, cost, baseLevel = 0, baseUpgradeGate = null) {
+function getUpgradeDisabledReason(player, structure, cost, castleLevel = 0, castleUpgradeGate = null) {
     if (structure.ownerId !== player.playerId) {
-        return 'Selecione uma construcao sua para upgrade.'
+        return t('error.selectOwnedStructure')
     }
 
     if (player.autoplay) {
-        return 'Autoplay ligado.'
+        return t('error.autoplayOn')
     }
 
     if (structure.disabled) {
-        return 'Esta construcao esta desativada.'
+        return t('error.structureDisabled')
     }
 
-    if (structure.type !== 'base' && structure.level >= baseLevel) {
-        return 'Bloqueado: nivel da estrutura ja igual ao nivel da Base.'
+    if (structure.type !== 'castle' && structure.level >= castleLevel) {
+        return t('error.structureLevelCastleCap')
     }
 
-    if (structure.type === 'base' && baseUpgradeGate && !baseUpgradeGate.ready) {
-        return `Base bloqueada: media ${baseUpgradeGate.averageLevel.toFixed(2)} < ${baseUpgradeGate.required.toFixed(2)} (${Math.round(baseUpgradeGate.ratio * 100)}% do nivel atual).`
+    if (structure.type === 'castle' && castleUpgradeGate && !castleUpgradeGate.ready) {
+        return t('error.castleUpgradeBlocked', {
+            avg: castleUpgradeGate.averageLevel.toFixed(2),
+            required: castleUpgradeGate.required.toFixed(2),
+            ratio: Math.round(castleUpgradeGate.ratio * 100),
+        })
     }
 
-    if (player.coal < cost) {
-        return `Carvao insuficiente: precisa de ${cost}.`
+    if (player.gold < cost) {
+        return t('error.notEnoughGold', { cost })
     }
 
     return ''
@@ -871,31 +977,31 @@ function getCaptureDisabledReason(game, player, structure) {
     const catalog = game.state.catalog.structures[structure.type]
 
     if (!catalog || !catalog.captureable) {
-        return 'Esta construcao nao pode ser capturada.'
+        return t('error.notCapturable')
     }
 
     if (!player || !player.alive) {
-        return 'Jogador fora da partida.'
+        return t('error.playerOut')
     }
 
     if (player.autoplay) {
-        return 'Autoplay ligado.'
+        return t('error.autoplayOn')
     }
 
     if (player.respawnAt) {
-        return 'Avatar reaparece em ' + getRespawnRemainingSeconds(player) + 's.'
+        return t('error.respawnIn', { seconds: getRespawnRemainingSeconds(player) })
     }
 
     if (structure.ownerId === player.playerId && !structure.disabled) {
-        return 'Esta construcao ja e sua.'
+        return t('error.alreadyOwned')
     }
 
     if (structure.ownerId === player.playerId && structure.disabled) {
-        return 'Construcao sua desativada.'
+        return t('error.ownDisabled')
     }
 
     if (player.order && player.order.type === 'capture' && player.order.structureId === structure.structureId) {
-        return 'Ordem de captura ja ativa.'
+        return t('error.captureOrderActive')
     }
 
     return ''
@@ -907,7 +1013,7 @@ function playersList(game, currentPlayerId) {
             || (first.joinedAt || 0) - (second.joinedAt || 0)
             || first.gamerTag.localeCompare(second.gamerTag))
         .map(player => {
-            const status = player.isAi ? 'IA' : player.autoplay ? 'Autoplay' : player.connected === false ? 'offline' : playerStatusLabel(player)
+            const status = player.isAi ? t('hud.ai') : player.autoplay ? t('hud.autoplay') : player.connected === false ? t('hud.offline') : playerStatusLabel(player)
 
             return `
                 <div class="player-row ${player.playerId === currentPlayerId ? 'current' : ''} ${player.connected === false ? 'offline' : ''}">
@@ -922,7 +1028,7 @@ function playersList(game, currentPlayerId) {
 
 function logsList(game) {
     if (!game.state.logs.length) {
-        return '<div class="log-line muted">Sem eventos</div>'
+        return '<div class="log-line muted">' + escapeHtml(t('hud.noEvents')) + '</div>'
     }
 
     return game.state.logs
@@ -934,11 +1040,11 @@ function getBuildDisabledReason(game, player, uiState, type) {
     const catalog = game.state.catalog.structures[type]
 
     if (!catalog) {
-        return 'Construcao indisponivel.'
+        return t('error.structureUnavailable')
     }
 
     if (!uiState.selectedTile) {
-        return 'Selecione um terreno.'
+        return t('error.selectTile')
     }
 
     const placementStatus = getPlacementStatus(game.state, player, uiState)
@@ -957,8 +1063,8 @@ function getBuildDisabledReason(game, player, uiState, type) {
         return getBuildRequirementMessage(game, player, type)
     }
 
-    if (player.coal < catalog.cost) {
-        return `Carvao insuficiente: precisa de ${catalog.cost}.`
+    if (player.gold < catalog.cost) {
+        return t('error.notEnoughGold', { cost: catalog.cost })
     }
 
     return ''
@@ -972,30 +1078,28 @@ function getBuildRequirementMessage(game, player, type) {
     }
 
     const catalog = game.state.catalog.structures[type]
+    const label = structureLabel(type)
 
-    if (catalog.requiresBaseLevel) {
-        return `Base nivel ${catalog.requiresBaseLevel} necessaria.`
+    if (catalog.requiresCastleLevel) {
+        return t('error.requiresCastleLevel', { level: catalog.requiresCastleLevel })
     }
 
     if (catalog.requiresResearch) {
-        const research = game.state.catalog.research[catalog.requiresResearch]
-        const label = research ? research.label : catalog.requiresResearch
-
-        return `Pesquise ${label} primeiro.`
+        return t('error.researchFirst', { name: researchLabel(catalog.requiresResearch) })
     }
 
     if (!player.unlocked[type]) {
-        return `${catalog.label} ainda nao liberada.`
+        return t('error.notUnlocked', { name: label })
     }
 
-    return `${catalog.label} indisponivel.`
+    return t('error.genericUnavailable', { name: label })
 }
 
 function getPlacementStatus(state, player, uiState) {
     if (!uiState.selectedTile) {
         return {
             status: 'blocked',
-            message: 'Selecione um terreno.',
+            message: t('error.selectTile'),
         }
     }
 
@@ -1004,41 +1108,41 @@ function getPlacementStatus(state, player, uiState) {
     if (!player || !player.alive) {
         return {
             status: 'blocked',
-            message: 'Jogador fora da partida.',
+            message: t('error.playerOut'),
         }
     }
 
     if (player.autoplay) {
         return {
             status: 'blocked',
-            message: 'Autoplay ligado.',
+            message: t('error.autoplayOn'),
         }
     }
 
     if (!isInsideMap(state, tile.x, tile.y)) {
         return {
             status: 'blocked',
-            message: 'Terreno invalido.',
+            message: t('error.invalidTile'),
         }
     }
 
     if (getStructureAt(state, tile.x, tile.y) || getActorAt(state, tile.x, tile.y)) {
         return {
             status: 'blocked',
-            message: 'Terreno ocupado.',
+            message: t('error.tileOccupied'),
         }
     }
 
     if (!isNearOwnedAnchor(state, player.playerId, tile.x, tile.y)) {
         return {
             status: 'blocked',
-            message: 'Fora do alcance de construcao.',
+            message: t('error.outOfBuildRange'),
         }
     }
 
     return {
         status: 'available',
-        message: 'Terreno livre para construir.',
+        message: t('status.tileAvailable'),
     }
 }
 
@@ -1074,13 +1178,13 @@ function canBuild(game, player, type) {
         return false
     }
 
-    if (type === 'cover') {
+    if (type === 'mine') {
         return true
     }
 
-    if (catalog.requiresBaseLevel) {
-        const base = game.state.structures[player.baseId]
-        return base && base.level >= catalog.requiresBaseLevel
+    if (catalog.requiresCastleLevel) {
+        const castle = game.state.structures[player.castleId]
+        return castle && castle.level >= catalog.requiresCastleLevel
     }
 
     if (catalog.requiresResearch) {
@@ -1118,10 +1222,10 @@ function getBuildLimitDisabledReason(game, type) {
     }
 
     if (limit.current > limit.max) {
-        return `${limit.current}/${limit.max} - sem novos slots ate cair abaixo do limite.`
+        return t('error.limitOver', { current: limit.current, max: limit.max })
     }
 
-    return `${limit.current}/${limit.max} - suba a Base.`
+    return t('error.limitFull', { current: limit.current, max: limit.max })
 }
 
 function highestStructureLevel(state, playerId, type) {
@@ -1164,22 +1268,22 @@ function getActorAt(state, x, y) {
 
 function playerStatusLabel(player) {
     if (!player || !player.alive) {
-        return 'fora'
+        return t('hud.out')
     }
 
     if (player.respawnAt) {
-        return 'respawn ' + getRespawnRemainingSeconds(player) + 's'
+        return t('hud.respawn', { seconds: getRespawnRemainingSeconds(player) })
     }
 
     if (!player.activeCaptureUnitId && player.avatarDeployed === false) {
-        return 'pronta'
+        return t('hud.ready')
     }
 
     if (typeof player.integrity === 'number' && typeof player.maxIntegrity === 'number') {
-        return Math.max(0, Math.ceil(player.integrity)) + '/' + player.maxIntegrity + ' HP'
+        return Math.max(0, Math.ceil(player.integrity)) + '/' + player.maxIntegrity + ' ' + t('hud.hp')
     }
 
-    return 'ativa'
+    return t('hud.active')
 }
 
 function getRespawnRemainingSeconds(player) {
@@ -1216,12 +1320,12 @@ function distance(first, second) {
 
 function getStructureWeight(type) {
     const weights = {
-        base: 1,
-        cover: 2,
-        taraque: 3,
-        tujai: 4,
-        per: 5,
-        hef: 6,
+        castle: 1,
+        mine: 2,
+        library: 3,
+        barracks: 4,
+        archer: 5,
+        catapult: 6,
     }
 
     return weights[type] || 10
@@ -1250,7 +1354,7 @@ function formatLogTime(timestamp) {
         return ''
     }
 
-    return date.toLocaleTimeString('pt-BR', {
+    return date.toLocaleTimeString(currentLocale(), {
         hour: '2-digit',
         minute: '2-digit',
     })
@@ -1263,7 +1367,7 @@ function formatNumber(value) {
         return '0'
     }
 
-    return Math.floor(number).toLocaleString('pt-BR')
+    return Math.floor(number).toLocaleString(currentLocale())
 }
 
 function clamp(value, min, max) {
@@ -1294,9 +1398,12 @@ function escapeHtml(value) {
 
 export const __renderTestables = {
     captureStatusPanel,
-    baseUpgradeGatePanel,
+    castleUpgradeGatePanel,
     getCaptureStatus,
     drawFogOverlay,
+    drawStructureSprite,
+    isImageReady,
+    setRenderAssetsForTests,
     hasRememberedStructureAt,
     isTileVisible,
     getRememberedStructureColor,

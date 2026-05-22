@@ -1,6 +1,6 @@
 # War Base
 
-War Base é um jogo multiplayer FFA (free-for-all) de bases. Cada jogador administra uma base, constrói estruturas, captura fábricas, pesquisa tecnologias, envia unidades e tenta ser o último com a base ativa.
+War Base e um jogo multiplayer FFA (free-for-all) de castelos. Cada jogador administra um castelo, constroi estruturas, captura minas e edificios desativados, pesquisa tecnologias, envia unidades e tenta ser o ultimo com o castelo ativo.
 
 ![Fluxograma do jogo](fluxograma.png)
 
@@ -37,9 +37,9 @@ O endpoint `GET /health` retorna `status`, `activeRooms`, `uptimeSeconds` e `tim
 
 - **Criar partida**: informe um GamerTag e o servidor gera uma HostKey de sala privada.
 - **Entrar em partida**: informe GamerTag e uma HostKey existente. A HostKey é normalizada para 5 caracteres alfanuméricos.
-- Também é possível pré-preencher a sala pela URL com `?sala=ABCDE`.
+- Tambem e possivel pre-preencher a sala pela URL com `?room=ABCDE` ou `?hostKey=ABCDE`.
 - O navegador lembra o último GamerTag usado para agilizar novas partidas no mesmo dispositivo.
-- Cada jogador começa com uma Base e 750 carvões.
+- Cada jogador comeca com um Castelo e 750 de ouro.
 
 ## Inteligência Artificial
 
@@ -60,149 +60,149 @@ npm run train:ai
 
 ## Objetivo
 
-Proteja sua Base. Quando a integridade de uma Base chega a 0, o dono é eliminado e todas as suas estruturas/unidades saem do jogo. Quando sobra apenas um jogador com Base ativa, ele vence.
+Proteja seu Castelo. Quando a integridade de um Castelo chega a 0, o dono e eliminado e todas as suas estruturas/unidades saem do jogo. Quando sobra apenas um jogador com Castelo ativo, ele vence.
 
 ## Gameplay Atual
 
-O jogador não é mais controlado diretamente por WASD como uma entidade no mapa. O jogador funciona como comandante da Base: seleciona terrenos/construções e emite ordens.
+O jogador nao e mais controlado diretamente por WASD como uma entidade no mapa. O jogador funciona como comandante do Castelo: seleciona terrenos/construcoes e emite ordens.
 
-Para capturar uma fábrica neutra ou desativada:
+Para capturar uma estrutura neutra ou desativada:
 
-1. Clique em uma construção capturável.
-2. Use o botão **Iniciar captura** ou o atalho `D`.
-3. A Base envia automaticamente um **Capturador**.
-4. O Capturador caminha sozinho até o alvo.
-5. Ao entrar no alcance de captura, ele começa a capturar.
-6. Se outro Capturador estiver influenciando a captura, eles podem se atacar.
-7. Após 30 segundos de progresso, a construção muda de dono e é reativada.
+1. Clique em uma construcao capturavel.
+2. Use o botao **Iniciar captura** ou o atalho `D`.
+3. O Castelo envia automaticamente um **Arauto**.
+4. O Arauto caminha sozinho ate o alvo.
+5. Ao entrar no alcance de captura, ele comeca a capturar.
+6. Se outro Arauto estiver influenciando a captura, eles podem se atacar.
+7. Apos 30 segundos de progresso, a construcao muda de dono e e reativada.
 
-Se o Capturador morrer, ele fica fora por 30 segundos e reaparece perto da Base.
+Se o Arauto morrer, ele fica fora por 30 segundos e reaparece perto do Castelo.
 
 ## Atalhos
 
-- `W`: upar a construção selecionada.
-- `A`: construir Cover no terreno selecionado.
-- `S`: enviar Zunim, se Tujai estiver ativa e houver carvão.
-- `D`: iniciar captura do alvo capturável; se não houver alvo capturável selecionado, foca a Base.
-- `Esc`: limpa a seleção.
-- Clique no mapa: seleciona terreno ou construção.
-- O HUD mostra recursos, estado da unidade, estruturas ativas, unidades em campo, jogadores offline e horário dos eventos.
+- `W`: evoluir a construcao selecionada.
+- `A`: construir Mina no terreno selecionado.
+- `S`: enviar Soldado, se o Quartel estiver ativo e houver ouro.
+- `D`: iniciar captura do alvo capturavel; se nao houver alvo capturavel selecionado, foca o Castelo.
+- `Esc`: limpa a selecao.
+- Clique no mapa: seleciona terreno ou construcao.
+- O HUD mostra recursos, estado da unidade, estruturas ativas, unidades em campo, jogadores offline e horario dos eventos.
 
 ## Loop Do Servidor
 
 A cada tick, o servidor processa:
 
-1. Respawns de Capturadores que morreram e já cumpriram 30 segundos.
-2. Geração de recursos por estruturas ativas.
-3. Regeneração de barreiras de estruturas e unidades fora de combate.
-4. Ordens dos Capturadores, incluindo movimento, ataque e aproximação para captura.
+1. Respawns de Arautos que morreram e ja cumpriram 30 segundos.
+2. Geracao de recursos por estruturas ativas.
+3. Regeneracao de barreiras de estruturas e unidades fora de combate.
+4. Ordens dos Arautos, incluindo movimento, ataque e aproximacao para captura.
 5. Progresso de captura de estruturas desativadas.
-6. Ataques automáticos de torres.
-7. Movimento/ataque de NPCs ofensivos, como Zunim.
-8. Condição de vitória.
+6. Ataques automaticos de torres.
+7. Movimento/ataque de NPCs ofensivos, como Soldados.
+8. Condicao de vitoria.
 
 ## Recursos
 
-- **Carvão**: recurso principal. Usado para construir, comprar NPCs e fazer upgrades. Gerado por Cover.
-- **Conhecimento**: recurso de tecnologia. Gerado por Taraque. Usado para pesquisar Per, Hef e Tujai.
+- **Ouro**: recurso principal. Usado para construir, comprar unidades e fazer upgrades. Gerado por Minas.
+- **Sabedoria**: recurso de tecnologia. Gerado por Bibliotecas. Usado para pesquisar Tiro de Arqueiro, Engenharia de Cerco e Treinamento Militar.
 
 ## Combate
 
 - Barreira absorve dano primeiro; depois o dano vai para integridade.
-- Barreira regenera quando a entidade não recebe dano por alguns segundos.
+- Barreira regenera quando a entidade nao recebe dano por alguns segundos.
 - Torres atacam automaticamente inimigos no alcance a cada 1 segundo.
-- Estruturas comuns zeradas ficam desativadas e capturáveis.
-- Bases zeradas eliminam o jogador.
+- Estruturas comuns zeradas ficam desativadas e capturaveis.
+- Castelos zerados eliminam o jogador.
 
 ## Captura
 
-- Só estruturas marcadas como capturáveis podem receber ordem de captura.
-- A Base não é capturável; ela deve ser destruída.
-- O Capturador tem 160 de integridade, 40 de barreira, 20 de dano e 1.5 de alcance.
-- O Capturador nasce perto da Base, anda 1 campo por tick e captura quando fica dentro do alcance.
-- Capturadores inimigos próximos ao mesmo ponto disputado podem lutar entre si.
+- So estruturas marcadas como capturaveis podem receber ordem de captura.
+- O Castelo nao e capturavel; ele deve ser destruido.
+- O Arauto tem 160 de integridade, 40 de barreira, 20 de dano e 1.5 de alcance.
+- O Arauto nasce perto do Castelo, anda 1 campo por tick e captura quando fica dentro do alcance.
+- Arautos inimigos proximos ao mesmo ponto disputado podem lutar entre si.
 - A captura leva 30 segundos de progresso.
 
-## Construções
+## Construcoes
 
-Cada tipo construível tem limite atrelado ao nível da Base. O limite usa `base + slope * (nivelDaBase - 1)`: Cover começa em 3 slots e ganha +2 por nível; Taraque, Per, Hef e Tujai começam em 1 slot e ganham +1 por nível. Estruturas próprias desativadas não contam para o limite, enquanto capturas podem deixar o jogador acima do cap e bloquear novas construções daquele tipo até abrir espaço ou subir a Base.
+Cada tipo construivel tem limite atrelado ao nivel do Castelo. O limite usa uma quantidade inicial mais um incremento por nivel: Mina comeca em 3 slots e ganha +2 por nivel; Biblioteca, Torre de Arqueiros, Catapulta e Quartel comecam em 1 slot e ganham +1 por nivel. Estruturas proprias desativadas nao contam para o limite, enquanto capturas podem deixar o jogador acima do cap e bloquear novas construcoes daquele tipo ate abrir espaco ou subir o Castelo.
 
-Estruturas que não são a Base só podem receber upgrade até o nível atual da Base. A Base não tem esse teto e é o eixo para liberar mais slots e níveis.
+Estruturas que nao sao o Castelo so podem receber upgrade ate o nivel atual do Castelo. O Castelo nao tem esse teto e e o eixo para liberar mais slots e niveis.
 
-O upgrade da Base também depende de um gate de progressão: a média de níveis das demais estruturas próprias ativas precisa alcançar `nivelAtualDaBase × 0.75` para que o botão de upgrade libere. Por exemplo, para subir do nível 4 para o 5 a média precisa ser ≥ 3; para subir de 100 para 101, ≥ 75. Estruturas desativadas próprias não entram na conta; capturas entram.
+O upgrade do Castelo tambem depende de um gate de progressao: a media de niveis das demais estruturas proprias ativas precisa alcancar `nivelAtualDoCastelo x 0.75` para que o botao de upgrade libere. Por exemplo, para subir do nivel 4 para o 5 a media precisa ser >= 3; para subir de 100 para 101, >= 75. Estruturas desativadas proprias nao entram na conta; capturas entram.
 
-### Base
+### Castelo
 
 - 1000 de integridade inicial.
 - 500 de barreira inicial.
-- +25 de integridade e +25 de barreira por nível.
-- Base nível 2 desbloqueia Taraque.
-- Não é capturável.
+- +25 de integridade e +25 de barreira por nivel.
+- Castelo nivel 2 desbloqueia Biblioteca.
+- Nao e capturavel.
 
-### Cover
+### Mina
 
-- Custa 540 carvões.
-- Gera carvão automaticamente.
-- Começa em +20 carvões por segundo.
-- +5 carvões por segundo por nível.
-- Capturável quando desativada/neutra.
+- Custa 540 de ouro.
+- Gera ouro automaticamente.
+- Comeca em +20 de ouro por segundo.
+- +5 de ouro por segundo por nivel.
+- Capturavel quando desativada/neutra.
 
-### Taraque
+### Biblioteca
 
-- Exige Base nível 2.
-- Gera conhecimento.
+- Exige Castelo nivel 2.
+- Gera sabedoria.
 - Permite pesquisas:
-  - Nível 1: Per e Hef.
-  - Nível 2: Tujai.
+  - Nivel 1: Tiro de Arqueiro e Engenharia de Cerco.
+  - Nivel 2: Treinamento Militar.
 
-### Per
+### Torre de Arqueiros
 
-- Torre de dano único.
-- Custa 140 carvões.
+- Torre de dano unico.
+- Custa 140 de ouro.
 - 500 de integridade.
 - 0 de barreira.
 - 5 de dano por tiro.
 - 20 de alcance.
 
-### Hef
+### Catapulta
 
-- Torre de dano em área.
-- Custa 200 carvões.
+- Torre de dano em area.
+- Custa 200 de ouro.
 - 200 de integridade.
 - 100 de barreira.
 - 15 de dano por tiro.
 - 10 de alcance.
 
-### Tujai
+### Quartel
 
-- Fábrica de NPCs ofensivos.
-- Custa 600 carvões.
+- Estrutura de unidades ofensivas.
+- Custa 600 de ouro.
 - 200 de integridade.
 - 0 de barreira.
-- Permite enviar Zunim depois da pesquisa Tujai.
+- Permite enviar Soldados depois da pesquisa Treinamento Militar.
 
 ## Unidades
 
-### Capturador
+### Arauto
 
-- Unidade automática enviada pela Base ao iniciar captura.
+- Unidade automatica enviada pelo Castelo ao iniciar captura.
 - Custo 0.
 - 160 de integridade.
 - 40 de barreira.
 - 20 de dano.
 - 1.5 de alcance.
-- Reaparece na Base 30 segundos após morrer.
+- Reaparece no Castelo 30 segundos apos morrer.
 
-### Zunim
+### Soldado
 
-- Unidade ofensiva comprada pela Tujai.
-- Custa 80 carvões.
+- Unidade ofensiva comprada pelo Quartel.
+- Custa 80 de ouro.
 - 150 de integridade.
 - 50 de barreira.
 - 10 de dano.
 - 1 de alcance.
-- Anda sozinho até a Base inimiga mais próxima.
-- Ganha +10 de integridade, +5 de barreira e +2 de dano por nível da Tujai.
+- Anda sozinho ate o Castelo inimigo mais proximo.
+- Ganha +10 de integridade, +5 de barreira e +2 de dano por nivel do Quartel.
 
 ## Desenvolvimento
 

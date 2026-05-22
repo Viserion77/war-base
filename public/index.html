@@ -3,22 +3,28 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#1b9aaa">
+    <meta name="theme-color" content="#2d2620">
     <title>War Base</title>
 
     <style>
         :root {
             color-scheme: light;
-            --ink: #25221f;
-            --muted: #6f665c;
-            --paper: #fbf8ef;
-            --sand: #ede3ce;
-            --line: #d7cab2;
-            --coal: #34302b;
-            --accent: #1b9aaa;
-            --danger: #d1495b;
-            --gold: #f6bd16;
-            --green: #2a9d8f;
+            --bg-stone: #2d2620;
+            --bg-stone-light: #3d342c;
+            --accent-gold: #d4af37;
+            --accent-iron: #6b6b6b;
+            --text-parchment: #ece2c4;
+            --danger-blood: #a83232;
+            --ink: #241b14;
+            --muted: #6f6252;
+            --paper: #f4ecd6;
+            --sand: #d8c7a4;
+            --line: #8b7653;
+            --stone-shadow: #34291f;
+            --accent: var(--accent-gold);
+            --danger: var(--danger-blood);
+            --gold: #d4af37;
+            --green: #4f8f5b;
         }
 
         * {
@@ -28,18 +34,19 @@
         body {
             margin: 0;
             min-height: 100vh;
-            background: var(--sand);
+            background: linear-gradient(180deg, #2d2620 0%, #5a4630 42%, var(--sand) 100%);
             color: var(--ink);
-            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-family: "Cinzel", Georgia, "Times New Roman", serif;
         }
 
         button,
-        input {
+        input,
+        select {
             font: inherit;
         }
 
         .app-shell {
-            width: min(1260px, calc(100vw - 28px));
+            width: calc(100vw - 28px);
             margin: 0 auto;
             padding: 18px 0;
         }
@@ -59,6 +66,29 @@
             gap: 10px;
         }
 
+        .brand-logo {
+            width: 40px;
+            height: 40px;
+            image-rendering: auto;
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .lang-switch {
+            min-height: 30px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--paper);
+            color: var(--ink);
+            cursor: pointer;
+            font-weight: 800;
+            padding: 0 8px;
+        }
+
         .brand h1 {
             margin: 0;
             font-size: clamp(1.35rem, 2vw, 2rem);
@@ -75,8 +105,8 @@
             min-height: 28px;
             border: 1px solid var(--line);
             border-radius: 6px;
-            background: #fffdf8;
-            color: var(--coal);
+            background: #fff8e4;
+            color: var(--gold);
             cursor: pointer;
             font-size: 0.78rem;
             font-weight: 900;
@@ -147,13 +177,15 @@
             outline: none;
         }
 
-        input:focus {
+        input:focus,
+        select:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(27, 154, 170, 0.16);
         }
 
         button:focus-visible,
         input:focus-visible,
+        select:focus-visible,
         #screen:focus-visible {
             outline: 3px solid rgba(27, 154, 170, 0.35);
             outline-offset: 2px;
@@ -183,7 +215,7 @@
         }
 
         .secondary-button {
-            background: var(--coal);
+            background: var(--gold);
             color: white;
         }
 
@@ -258,14 +290,19 @@
 
         .game-layout {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 340px;
+            grid-template-columns: minmax(0, 1fr) 320px;
             gap: 16px;
-            align-items: start;
+            align-items: stretch;
+            height: calc(100vh - 90px);
         }
 
         .board-wrap {
             min-width: 0;
-            overflow: auto;
+            min-height: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
             background: var(--paper);
             border: 1px solid var(--line);
             border-radius: 8px;
@@ -276,11 +313,11 @@
         #screen {
             display: block;
             width: 100%;
-            max-height: calc(100vh - 98px);
+            max-height: 100%;
             aspect-ratio: 48 / 30;
             border: 1px solid #bbae94;
             border-radius: 4px;
-            background: #f4efe4;
+            background: #4a6b3a;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
             outline: none;
@@ -290,6 +327,12 @@
         #hud {
             display: grid;
             gap: 10px;
+        }
+
+        .side-rail {
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .panel {
@@ -369,7 +412,7 @@
             border-radius: 5px;
             background: var(--sand);
             border: 1px solid var(--line);
-            color: var(--coal);
+            color: var(--gold);
             font-weight: 900;
             text-align: center;
             white-space: nowrap;
@@ -430,7 +473,7 @@
             background: var(--gold);
         }
 
-        .base-gate {
+        .castle-gate {
             display: grid;
             gap: 6px;
             margin-top: 10px;
@@ -440,12 +483,12 @@
             background: rgba(120, 120, 120, 0.10);
         }
 
-        .base-gate.base-gate-ready {
+        .castle-gate.castle-gate-ready {
             border-color: rgba(67, 170, 139, 0.6);
             background: rgba(67, 170, 139, 0.14);
         }
 
-        .base-gate-header {
+        .castle-gate-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -455,25 +498,25 @@
             color: var(--muted);
         }
 
-        .base-gate.base-gate-ready .base-gate-header {
+        .castle-gate.castle-gate-ready .castle-gate-header {
             color: #155c45;
         }
 
-        .base-gate-meter {
+        .castle-gate-meter {
             height: 6px;
             overflow: hidden;
             border-radius: 999px;
             background: rgba(120, 120, 120, 0.18);
         }
 
-        .base-gate-meter span {
+        .castle-gate-meter span {
             display: block;
             height: 100%;
             border-radius: inherit;
             background: var(--muted);
         }
 
-        .base-gate.base-gate-ready .base-gate-meter span {
+        .castle-gate.castle-gate-ready .castle-gate-meter span {
             background: #43aa8b;
         }
 
@@ -596,7 +639,7 @@
         }
 
         .log-line time {
-            color: var(--coal);
+            color: var(--gold);
             font-variant-numeric: tabular-nums;
             font-weight: 800;
         }
@@ -612,10 +655,17 @@
         @media (max-width: 980px) {
             .game-layout {
                 grid-template-columns: 1fr;
+                height: auto;
             }
 
             #screen {
-                max-height: none;
+                height: auto;
+                max-height: 70vh;
+            }
+
+            .side-rail {
+                height: auto;
+                overflow-y: visible;
             }
         }
 
@@ -651,29 +701,37 @@
     <main class="app-shell">
         <header class="topbar">
             <div class="brand">
+                <img class="brand-logo" src="/img/logo.png" alt="" width="40" height="40">
                 <h1>War Base</h1>
-                <span id="room-label">sem sala</span>
-                <button id="copy-room-key" class="room-copy-button" type="button" title="Copiar HostKey" aria-label="Copiar HostKey" hidden>Copiar</button>
+                <span id="brand-tagline" data-i18n="app.tagline">Fortifique. Conquiste. Resista.</span>
+                <span id="room-label"></span>
+                <button id="copy-room-key" class="room-copy-button" type="button" data-i18n="lobby.copy" data-i18n-title="lobby.copyHostKey" data-i18n-aria="lobby.copyHostKey" hidden>Copiar</button>
             </div>
-            <div id="connection-status" class="connection-status" role="status" aria-live="polite">conectando</div>
+            <div class="topbar-actions">
+                <div id="connection-status" class="connection-status" role="status" aria-live="polite"></div>
+                <select id="lang-switch" class="lang-switch" aria-label="Idioma / Language">
+                    <option value="pt-BR">PT-BR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
         </header>
 
         <section id="lobby" class="lobby">
             <form id="lobby-form" class="lobby-card" autocomplete="off">
-                <h2>Partida privada</h2>
+                <h2 data-i18n="lobby.privateMatch">Partida privada</h2>
                 <div class="field-stack">
                     <label>
-                        GamerTag
-                        <input id="gamer-tag" name="gamerTag" maxlength="18" autocomplete="nickname" placeholder="Ex: Alice" spellcheck="false" aria-describedby="lobby-error" autofocus required>
+                        <span data-i18n="lobby.gamerTag">GamerTag</span>
+                        <input id="gamer-tag" name="gamerTag" maxlength="18" autocomplete="nickname" data-i18n-placeholder="lobby.gamerTagPlaceholder" placeholder="Ex: Alice" spellcheck="false" aria-describedby="lobby-error" autofocus required>
                     </label>
                     <label>
-                        HostKey
-                        <input id="host-key" name="hostKey" maxlength="5" autocomplete="off" autocapitalize="characters" inputmode="text" pattern="[A-Za-z0-9]{5}" placeholder="ABCDE" spellcheck="false" aria-describedby="lobby-error">
+                        <span data-i18n="lobby.hostKey">HostKey</span>
+                        <input id="host-key" name="hostKey" maxlength="5" autocomplete="off" autocapitalize="characters" inputmode="text" pattern="[A-Za-z0-9]{5}" data-i18n-placeholder="lobby.hostKeyPlaceholder" placeholder="ABCDE" spellcheck="false" aria-describedby="lobby-error">
                     </label>
                 </div>
                 <div class="lobby-actions">
-                    <button class="primary-button" type="submit" data-mode="create">Criar partida</button>
-                    <button class="secondary-button" type="submit" data-mode="join">Entrar</button>
+                    <button class="primary-button" type="submit" data-mode="create" data-i18n="lobby.createMatch">Criar Partida</button>
+                    <button class="secondary-button" type="submit" data-mode="join" data-i18n="lobby.joinMatch">Entrar</button>
                 </div>
                 <div id="lobby-error" class="error-line" role="alert" aria-live="assertive"></div>
             </form>
@@ -681,31 +739,31 @@
 
         <section id="game-view" class="game-layout hidden">
             <div class="board-wrap">
-                <canvas id="screen" width="864" height="540" tabindex="0" role="img" aria-label="Mapa da partida"></canvas>
+                <canvas id="screen" width="864" height="540" tabindex="0" role="img" data-i18n-aria="canvas.map" aria-label="Mapa da partida"></canvas>
             </div>
             <aside class="side-rail">
                 <section class="panel how-to-panel">
-                    <details open>
-                        <summary>Como jogar</summary>
+                    <details>
+                        <summary data-i18n="help.title">Como jogar</summary>
                         <div class="help-block">
-                            <strong>Objetivo</strong>
+                            <strong data-i18n="help.objectiveTitle">Objetivo</strong>
                             <ul class="help-list">
-                                <li>Proteja sua Base. A ultima base ativa vence.</li>
-                                <li>Capture fabricas neutras ou desativadas selecionando o alvo; Iniciar captura envia um Capturador da Base.</li>
-                                <li>Use Cover para gerar carvao, evolua a Base para nivel 2 e construa Taraque para pesquisar ataques.</li>
-                                <li>Pesquise Per, Hef e Tujai. A Tujai permite enviar Zunim contra a base inimiga mais proxima.</li>
+                                <li data-i18n="help.objectiveProtect">Proteja seu Castelo. O ultimo castelo ativo vence.</li>
+                                <li data-i18n="help.objectiveCapture">Capture minas neutras ou desativadas selecionando o alvo; Iniciar Captura envia um Arauto do Castelo.</li>
+                                <li data-i18n="help.objectiveEconomy">Use Minas para gerar ouro, evolua o Castelo para nivel 2 e construa Bibliotecas para pesquisar ataques.</li>
+                                <li data-i18n="help.objectiveArmy">Pesquise Tiro de Arqueiro, Engenharia de Cerco e Treinamento Militar. O Quartel permite enviar Soldados contra o castelo inimigo mais proximo.</li>
                             </ul>
                         </div>
                         <div class="help-block">
-                            <strong>Comandos</strong>
+                            <strong data-i18n="help.commandsTitle">Comandos</strong>
                             <dl class="command-list">
-                                <div><dt>W</dt><dd>Upar a construcao selecionada.</dd></div>
-                                <div><dt>A</dt><dd>Construir Cover no terreno selecionado.</dd></div>
-                                <div><dt>S</dt><dd>Enviar Zunim quando Tujai estiver ativa.</dd></div>
-                                <div><dt>D</dt><dd>Iniciar captura do alvo ou focar a Base.</dd></div>
-                                <div><dt>Clique</dt><dd>Selecionar terreno ou construcao capturavel.</dd></div>
-                                <div><dt>Botoes</dt><dd>Construir, pesquisar, evoluir, capturar e enviar NPC.</dd></div>
-                                <div><dt>HostKey</dt><dd>Codigo para outros jogadores entrarem na sala.</dd></div>
+                                <div><dt>W</dt><dd data-i18n="help.commandW">Evoluir a construcao selecionada.</dd></div>
+                                <div><dt>A</dt><dd data-i18n="help.commandA">Construir Mina no terreno selecionado.</dd></div>
+                                <div><dt>S</dt><dd data-i18n="help.commandS">Enviar Soldado quando o Quartel estiver ativo.</dd></div>
+                                <div><dt>D</dt><dd data-i18n="help.commandD">Iniciar captura do alvo ou focar o Castelo.</dd></div>
+                                <div><dt>Clique</dt><dd data-i18n="help.commandClick">Selecionar terreno ou construcao capturavel.</dd></div>
+                                <div><dt>Botoes</dt><dd data-i18n="help.commandButtons">Construir, pesquisar, evoluir, capturar e enviar unidade.</dd></div>
+                                <div><dt>HostKey</dt><dd data-i18n="help.commandHostKey">Codigo para outros jogadores entrarem na sala.</dd></div>
                             </dl>
                         </div>
                     </details>
@@ -717,7 +775,8 @@
 
     <script type="module">
         import createGame from './game.js'
-        import renderScreen, { getStructureAt, getTileFromCanvasEvent, setupScreen } from './render-screen.js'
+        import renderScreen, { getStructureAt, getTileFromCanvasEvent, preloadRenderAssets, setupScreen } from './render-screen.js'
+        import { getLang, onLangChange, setLang, t } from './i18n/index.js'
 
         const game = createGame()
         const socket = io()
@@ -728,6 +787,8 @@
 
         let renderStarted = false
         let submitMode = 'create'
+        let audioUnlocked = false
+        let seenLogIds = new Set()
 
         const lobby = document.getElementById('lobby')
         const lobbyForm = document.getElementById('lobby-form')
@@ -738,26 +799,34 @@
         const roomLabel = document.getElementById('room-label')
         const copyRoomKeyButton = document.getElementById('copy-room-key')
         const connectionStatus = document.getElementById('connection-status')
+        const langSwitch = document.getElementById('lang-switch')
         const gamerTagInput = document.getElementById('gamer-tag')
         const hostKeyInput = document.getElementById('host-key')
         const lobbySubmitButtons = Array.from(lobbyForm.querySelectorAll('button[type="submit"]'))
+        const audioAssets = createAudioAssets()
+        preloadRenderAssets()
         let copyFeedbackTimeout = null
         let lobbyPending = false
 
         hydrateLobbyFields()
+        setupAudioUnlock()
+        setupLanguageSwitch()
+        applyTranslations()
+        updateRoomHeader()
+        setConnectionStatus('connection.connecting', 'pending')
 
         socket.on('connect', () => {
-            setConnectionStatus('online', 'online')
+            setConnectionStatus('connection.online', 'online')
             setLobbyPending(false)
         })
 
         socket.on('disconnect', () => {
-            setConnectionStatus('offline', 'offline')
+            setConnectionStatus('connection.offline', 'offline')
             setLobbyPending(false)
         })
 
         socket.on('connect_error', () => {
-            setConnectionStatus('erro de conexao', 'offline')
+            setConnectionStatus('connection.error', 'offline')
             setLobbyPending(false)
         })
 
@@ -784,13 +853,13 @@
             const hostKey = normalizeHostKey(formData.get('hostKey'))
 
             if (!gamerTag) {
-                lobbyError.textContent = 'Informe um GamerTag.'
+                lobbyError.textContent = t('lobby.errorMissingTag')
                 gamerTagInput.focus()
                 return
             }
 
             if (submitMode === 'join' && !hostKey) {
-                lobbyError.textContent = 'Informe uma HostKey.'
+                lobbyError.textContent = t('lobby.errorMissingHostKey')
                 hostKeyInput.focus()
                 return
             }
@@ -810,6 +879,7 @@
         socket.on('setup', (result) => {
             setLobbyPending(false)
             game.setState(result.state)
+            syncSeenLogs(result.state)
             persistRoomInUrl(result.hostKey)
             enterGame()
         })
@@ -820,13 +890,14 @@
             }
 
             game.setState(command.state)
+            playStateUpdateSounds(command)
             syncSelectionWithState()
             updateRoomHeader()
         })
 
         socket.on('join-error', (result) => {
             setLobbyPending(false)
-            lobbyError.textContent = result.error || 'Nao foi possivel entrar.'
+            lobbyError.textContent = result.error || t('lobby.errorJoin')
         })
 
         copyRoomKeyButton.addEventListener('click', async () => {
@@ -836,9 +907,9 @@
 
             try {
                 await copyText(game.state.hostKey)
-                showCopyFeedback('Copiado')
+                showCopyFeedback(t('lobby.copied'))
             } catch (error) {
-                showCopyFeedback('Falhou')
+                showCopyFeedback(t('lobby.copyFailed'))
             }
         })
 
@@ -918,6 +989,138 @@
             }
         })
 
+        function setupAudioUnlock() {
+            const unlock = () => {
+                audioUnlocked = true
+                for (const audio of Object.values(audioAssets)) {
+                    audio.load()
+                }
+            }
+
+            document.addEventListener('pointerdown', unlock, { once: true })
+            document.addEventListener('keydown', unlock, { once: true })
+        }
+
+        function createAudioAssets() {
+            if (typeof Audio === 'undefined') {
+                return {}
+            }
+
+            return {
+                arrowHit: createAudio('/sounds/arrow_hit.mp3', 0.35),
+                unitDeath: createAudio('/sounds/unit_death.mp3', 0.38),
+                goldDrop: createAudio('/sounds/gold_drop.mp3', 0.32),
+                researchDone: createAudio('/sounds/research_done.mp3', 0.42),
+                castleFalls: createAudio('/sounds/castle_falls.mp3', 0.5),
+                shieldClang: createAudio('/sounds/shield_clang.mp3', 0.35),
+            }
+        }
+
+        function createAudio(src, volume) {
+            const audio = new Audio(src)
+            audio.preload = 'auto'
+            audio.volume = volume
+            return audio
+        }
+
+        function playStateUpdateSounds(command) {
+            const played = new Set()
+            playSoundOnce(getSoundForReason(command.reason), played)
+
+            const logs = Array.isArray(command.state?.logs) ? command.state.logs : []
+            for (const log of logs.slice().reverse()) {
+                if (!log.id || seenLogIds.has(log.id)) {
+                    continue
+                }
+
+                playSoundOnce(getSoundForLog(log.message), played)
+            }
+
+            syncSeenLogs(command.state)
+        }
+
+        function syncSeenLogs(state) {
+            seenLogIds = new Set((state?.logs || [])
+                .map(log => log.id)
+                .filter(Boolean))
+        }
+
+        function getSoundForReason(reason) {
+            if (reason === 'build') return 'goldDrop'
+            if (reason === 'upgrade') return 'shieldClang'
+            if (reason === 'research') return 'researchDone'
+            if (reason === 'spawn-npc') return 'shieldClang'
+            if (reason === 'capture') return 'shieldClang'
+            if (reason === 'move-herald-to') return 'shieldClang'
+            return null
+        }
+
+        function getSoundForLog(message) {
+            const text = String(message || '').toLowerCase()
+
+            if (text.includes('lost the castle')) return 'castleFalls'
+            if (text.includes('lost the herald') || text.includes('lost the soldier') || text.includes(' fell to ')) return 'unitDeath'
+            if (text.includes('was disabled') || text.includes('was destroyed')) return 'arrowHit'
+            if (text.includes('researched')) return 'researchDone'
+            if (text.includes('captured') || text.includes('built')) return 'goldDrop'
+            if (text.includes('upgraded') || text.includes('sent a soldier') || text.includes('sent a herald')) return 'shieldClang'
+            return null
+        }
+
+        function playSoundOnce(name, played) {
+            if (!name || played.has(name)) {
+                return
+            }
+
+            played.add(name)
+            playSound(name)
+        }
+
+        function playSound(name) {
+            if (!audioUnlocked || !audioAssets[name]) {
+                return
+            }
+
+            const sound = audioAssets[name].cloneNode()
+            sound.volume = audioAssets[name].volume
+            sound.play().catch(() => {})
+        }
+
+        function setupLanguageSwitch() {
+            langSwitch.value = getLang()
+            langSwitch.addEventListener('change', (event) => {
+                setLang(event.target.value)
+            })
+            onLangChange(() => {
+                langSwitch.value = getLang()
+                applyTranslations()
+                updateRoomHeader()
+                if (screen.width) {
+                    setupScreen(screen, game)
+                }
+                hud.__lastHtml = null
+            })
+        }
+
+        function applyTranslations() {
+            document.documentElement.lang = getLang()
+            for (const element of document.querySelectorAll('[data-i18n]')) {
+                element.textContent = t(element.dataset.i18n)
+            }
+            for (const element of document.querySelectorAll('[data-i18n-placeholder]')) {
+                element.setAttribute('placeholder', t(element.dataset.i18nPlaceholder))
+            }
+            for (const element of document.querySelectorAll('[data-i18n-title]')) {
+                element.setAttribute('title', t(element.dataset.i18nTitle))
+            }
+            for (const element of document.querySelectorAll('[data-i18n-aria]')) {
+                element.setAttribute('aria-label', t(element.dataset.i18nAria))
+            }
+            if (connectionStatus.dataset.labelKey) {
+                connectionStatus.textContent = t(connectionStatus.dataset.labelKey)
+            }
+        }
+
         function handleKeyboardShortcut(event) {
             if (!game.state.hostKey || isEditableTarget(event.target)) {
                 return
@@ -946,15 +1149,15 @@
             }
 
             if (key === 'a') {
-                buildCoverOnSelectedTile()
+                buildMineOnSelectedTile()
             }
 
             if (key === 's') {
-                spawnZunim()
+                spawnSoldier()
             }
 
             if (key === 'd') {
-                captureSelectedStructureOrFocusBase()
+                captureSelectedStructureOrFocusCastle()
             }
         }
 
@@ -973,27 +1176,27 @@
             })
         }
 
-        function buildCoverOnSelectedTile() {
+        function buildMineOnSelectedTile() {
             if (!uiState.selectedTile) {
                 return
             }
 
             socket.emit('game-action', {
                 action: 'build',
-                structureType: 'cover',
+                structureType: 'mine',
                 x: uiState.selectedTile.x,
                 y: uiState.selectedTile.y,
             })
         }
 
-        function spawnZunim() {
+        function spawnSoldier() {
             socket.emit('game-action', {
                 action: 'spawn-npc',
-                npcType: 'zunim',
+                npcType: 'soldier',
             })
         }
 
-        function captureSelectedStructureOrFocusBase() {
+        function captureSelectedStructureOrFocusCastle() {
             const structure = uiState.selectedStructureId ? game.state.structures[uiState.selectedStructureId] : null
             const catalog = structure ? game.state.catalog.structures[structure.type] : null
 
@@ -1005,19 +1208,19 @@
                 return
             }
 
-            focusOwnBase()
+            focusOwnCastle()
         }
 
-        function focusOwnBase() {
+        function focusOwnCastle() {
             const player = game.state.players[socket.id]
-            const base = player ? game.state.structures[player.baseId] : null
+            const castle = player ? game.state.structures[player.castleId] : null
 
-            if (!base) {
+            if (!castle) {
                 return
             }
 
-            uiState.selectedTile = { x: base.x, y: base.y }
-            uiState.selectedStructureId = base.structureId
+            uiState.selectedTile = { x: castle.x, y: castle.y }
+            uiState.selectedStructureId = castle.structureId
         }
 
         function enterGame() {
@@ -1035,9 +1238,9 @@
 
         function updateRoomHeader() {
             const hasRoom = Boolean(game.state.hostKey)
-            roomLabel.textContent = hasRoom ? `sala ${game.state.hostKey}` : 'sem sala'
+            roomLabel.textContent = hasRoom ? `${t('lobby.room')} ${game.state.hostKey}` : t('lobby.noRoom')
             copyRoomKeyButton.hidden = !hasRoom
-            document.title = hasRoom ? `War Base - ${game.state.hostKey}` : 'War Base'
+            document.title = hasRoom ? `War Base - ${game.state.hostKey}` : t('app.title')
         }
 
         async function copyText(text) {
@@ -1058,7 +1261,7 @@
                 const copied = document.execCommand('copy')
 
                 if (!copied) {
-                    throw new Error('Nao foi possivel copiar.')
+                    throw new Error('Could not copy.')
                 }
             } finally {
                 document.body.removeChild(field)
@@ -1069,12 +1272,13 @@
             copyRoomKeyButton.textContent = message
             clearTimeout(copyFeedbackTimeout)
             copyFeedbackTimeout = setTimeout(() => {
-                copyRoomKeyButton.textContent = 'Copiar'
+                copyRoomKeyButton.textContent = t('lobby.copy')
             }, 1400)
         }
 
-        function setConnectionStatus(label, statusClass) {
-            connectionStatus.textContent = label
+        function setConnectionStatus(labelKey, statusClass) {
+            connectionStatus.dataset.labelKey = labelKey
+            connectionStatus.textContent = t(labelKey)
             connectionStatus.classList.toggle('online', statusClass === 'online')
             connectionStatus.classList.toggle('offline', statusClass === 'offline')
         }
@@ -1097,7 +1301,7 @@
         function hydrateLobbyFields() {
             const storedGamerTag = localStorage.getItem('war-base:gamer-tag')
             const url = new URL(window.location.href)
-            const urlHostKey = url.searchParams.get('sala') || url.searchParams.get('hostKey')
+            const urlHostKey = url.searchParams.get('room') || url.searchParams.get('hostKey') || url.searchParams.get('sala')
 
             if (storedGamerTag) {
                 gamerTagInput.value = storedGamerTag
@@ -1115,7 +1319,7 @@
             }
 
             const url = new URL(window.location.href)
-            url.searchParams.set('sala', hostKey)
+            url.searchParams.set('room', hostKey)
             window.history.replaceState(null, '', url)
         }
 

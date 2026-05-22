@@ -1,19 +1,19 @@
 /* istanbul ignore file -- datasets are exercised through the training command. */
 import { BOARD_WIDTH, COMPOSITE_INPUT_SIZE, HEATMAP_OUTPUT_SIZE, PLACEMENT_INPUT_SIZE, PLACEMENT_STRUCTURE_TYPES, SCALAR_INPUTS } from '../constants.js'
 
-export function entradaComEscalares(valores = {}, tamanho = COMPOSITE_INPUT_SIZE) {
-    const entrada = new Array(tamanho).fill(0)
+export function inputWithScalars(values = {}, size = COMPOSITE_INPUT_SIZE) {
+    const input = new Array(size).fill(0)
     const scalarOffset = COMPOSITE_INPUT_SIZE - SCALAR_INPUTS.length
 
-    for (const [nome, valor] of Object.entries(valores)) {
-        const index = SCALAR_INPUTS.indexOf(nome)
+    for (const [name, value] of Object.entries(values)) {
+        const index = SCALAR_INPUTS.indexOf(name)
 
-        if (index >= 0 && scalarOffset + index < entrada.length) {
-            entrada[scalarOffset + index] = valor
+        if (index >= 0 && scalarOffset + index < input.length) {
+            input[scalarOffset + index] = value
         }
     }
 
-    return entrada
+    return input
 }
 
 export function oneHot(labels, label) {
@@ -21,22 +21,22 @@ export function oneHot(labels, label) {
 }
 
 export function heatmap(x, y) {
-    const saida = new Array(HEATMAP_OUTPUT_SIZE).fill(0)
-    saida[y * BOARD_WIDTH + x] = 1
-    return saida
+    const output = new Array(HEATMAP_OUTPUT_SIZE).fill(0)
+    output[y * BOARD_WIDTH + x] = 1
+    return output
 }
 
-export function exemploClassificacao(labels, label, escalares = {}) {
-    return { entradas: entradaComEscalares(escalares), saidas: oneHot(labels, label) }
+export function classificationExample(labels, label, scalars = {}) {
+    return { inputs: inputWithScalars(scalars), outputs: oneHot(labels, label) }
 }
 
-export function exemploHeatmap(x, y, escalares = {}) {
-    return { entradas: entradaComEscalares(escalares), saidas: heatmap(x, y) }
+export function heatmapExample(x, y, scalars = {}) {
+    return { inputs: inputWithScalars(scalars), outputs: heatmap(x, y) }
 }
 
-export function exemploPlacement(tipo, x, y, escalares = {}) {
-    const entrada = entradaComEscalares(escalares, PLACEMENT_INPUT_SIZE)
-    const oneHotTipo = PLACEMENT_STRUCTURE_TYPES.map(candidate => candidate === tipo ? 1 : 0)
-    entrada.splice(COMPOSITE_INPUT_SIZE, oneHotTipo.length, ...oneHotTipo)
-    return { entradas: entrada, saidas: heatmap(x, y), tipo }
+export function placementExample(type, x, y, scalars = {}) {
+    const input = inputWithScalars(scalars, PLACEMENT_INPUT_SIZE)
+    const typeOneHot = PLACEMENT_STRUCTURE_TYPES.map(candidate => candidate === type ? 1 : 0)
+    input.splice(COMPOSITE_INPUT_SIZE, typeOneHot.length, ...typeOneHot)
+    return { inputs: input, outputs: heatmap(x, y), type }
 }

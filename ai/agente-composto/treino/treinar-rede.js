@@ -1,10 +1,10 @@
 /* istanbul ignore file -- command-line training helper; core network behavior is covered in tests. */
 import fs from 'fs'
 import path from 'path'
-import RedeNeural from '../../rede-neural/rede-neural.js'
+import NeuralNetwork from '../../rede-neural/rede-neural.js'
 
-export function criarGeradorAleatorio(seedInicial) {
-    let seed = seedInicial >>> 0
+export function createSeededRandom(initialSeed) {
+    let seed = initialSeed >>> 0
 
     return () => {
         seed = (seed * 1664525 + 1013904223) >>> 0
@@ -12,34 +12,34 @@ export function criarGeradorAleatorio(seedInicial) {
     }
 }
 
-export function treinarRedeComDataset({ nome, spec, dataset, epocas = Number(process.env.WAR_BASE_AI_EPOCHS || 300), taxaAprendizado = 0.15, seed = 77311 }) {
-    const rede = new RedeNeural(spec.inputs, spec.hidden, spec.outputs, {
-        taxaAprendizado,
-        aleatorio: criarGeradorAleatorio(seed),
+export function trainNetworkWithDataset({ name, spec, dataset, epochs = Number(process.env.WAR_BASE_AI_EPOCHS || 300), learningRate = 0.15, seed = 77311 }) {
+    const network = new NeuralNetwork(spec.inputs, spec.hidden, spec.outputs, {
+        learningRate,
+        random: createSeededRandom(seed),
     })
 
-    for (let epoca = 0; epoca < epocas; epoca += 1) {
+    for (let epoch = 0; epoch < epochs; epoch += 1) {
         for (const item of dataset) {
-            rede.treinar(item.entradas, item.saidas)
+            network.train(item.inputs, item.outputs)
         }
     }
 
     return {
-        name: 'war-base-composite-' + nome,
+        name: 'war-base-composite-' + name,
         trainedAt: new Date().toISOString(),
         examples: dataset.length,
-        epocas,
-        rede: rede.toJSON(),
+        epochs,
+        network: network.toJSON(),
     }
 }
 
-export function salvarRede({ nome, modelo, outputDir }) {
+export function saveNetwork({ name, model, outputDir }) {
     fs.mkdirSync(outputDir, { recursive: true })
-    const filePath = path.join(outputDir, nome + '.json')
-    fs.writeFileSync(filePath, JSON.stringify(modelo, null, 2) + '\n')
+    const filePath = path.join(outputDir, name + '.json')
+    fs.writeFileSync(filePath, JSON.stringify(model, null, 2) + '\n')
     return filePath
 }
 
-export function indiceMaiorScore(saidas) {
-    return saidas.reduce((best, score, index) => score > saidas[best] ? index : best, 0)
+export function highestScoreIndex(outputs) {
+    return outputs.reduce((best, score, index) => score > outputs[best] ? index : best, 0)
 }

@@ -5,7 +5,7 @@ const SCREEN = {
 }
 
 const CONFIG = {
-    initialCoal: 750,
+    initialGold: 750,
     captureDurationMs: 30000,
     captureRange: 2,
     buildRange: 6,
@@ -20,12 +20,11 @@ const CONFIG = {
     shieldRegenPerSecond: 8,
     maxPlayersPerRoom: 8,
     logLimit: 12,
-    baseUpgradeAverageRatio: 0.75,
+    castleUpgradeAverageRatio: 0.75,
 }
 
 const STRUCTURES = {
-    base: {
-        label: 'Base',
+    castle: {
         cost: 500,
         integrity: 1000,
         barrier: 500,
@@ -35,35 +34,32 @@ const STRUCTURES = {
         captureable: false,
         buildable: false,
     },
-    cover: {
-        label: 'Cover',
+    mine: {
         cost: 540,
         integrity: 300,
         barrier: 100,
         sightRange: 4,
-        coalRate: 20,
-        coalRatePerLevel: 5,
+        goldRate: 20,
+        goldRatePerLevel: 5,
         captureable: true,
         buildable: true,
         buildLimitBase: 3,
         buildLimitSlope: 2,
     },
-    taraque: {
-        label: 'Taraque',
+    library: {
         cost: 320,
         integrity: 350,
         barrier: 150,
         sightRange: 4,
-        knowledgeRate: 2,
-        knowledgeRatePerLevel: 1,
+        wisdomRate: 2,
+        wisdomRatePerLevel: 1,
         captureable: true,
         buildable: true,
-        requiresBaseLevel: 2,
+        requiresCastleLevel: 2,
         buildLimitBase: 1,
         buildLimitSlope: 1,
     },
-    per: {
-        label: 'Per',
+    archer: {
         cost: 140,
         integrity: 500,
         barrier: 0,
@@ -73,12 +69,11 @@ const STRUCTURES = {
         attackEveryMs: 1000,
         captureable: true,
         buildable: true,
-        requiresResearch: 'per',
+        requiresResearch: 'archer',
         buildLimitBase: 1,
         buildLimitSlope: 1,
     },
-    hef: {
-        label: 'Hef',
+    catapult: {
         cost: 200,
         integrity: 200,
         barrier: 100,
@@ -89,45 +84,40 @@ const STRUCTURES = {
         attackEveryMs: 1000,
         captureable: true,
         buildable: true,
-        requiresResearch: 'hef',
+        requiresResearch: 'catapult',
         buildLimitBase: 1,
         buildLimitSlope: 1,
     },
-    tujai: {
-        label: 'Tujai',
+    barracks: {
         cost: 600,
         integrity: 200,
         barrier: 0,
         sightRange: 4,
         captureable: true,
         buildable: true,
-        requiresResearch: 'tujai',
+        requiresResearch: 'barracks',
         buildLimitBase: 1,
         buildLimitSlope: 1,
     },
 }
 
 const RESEARCH = {
-    per: {
-        label: 'Per',
+    archer: {
         cost: 15,
-        requiresTaraqueLevel: 1,
+        requiresLibraryLevel: 1,
     },
-    hef: {
-        label: 'Hef',
+    catapult: {
         cost: 25,
-        requiresTaraqueLevel: 1,
+        requiresLibraryLevel: 1,
     },
-    tujai: {
-        label: 'Tujai',
+    barracks: {
         cost: 60,
-        requiresTaraqueLevel: 2,
+        requiresLibraryLevel: 2,
     },
 }
 
 const NPCS = {
-    capturer: {
-        label: 'Capturador',
+    herald: {
         cost: 0,
         integrity: 160,
         barrier: 40,
@@ -137,8 +127,7 @@ const NPCS = {
         attackEveryMs: 1000,
         speed: 1,
     },
-    zunim: {
-        label: 'Zunim',
+    soldier: {
         cost: 80,
         integrity: 150,
         barrier: 50,
@@ -147,10 +136,30 @@ const NPCS = {
         sightRange: 3,
         attackEveryMs: 1000,
         speed: 1,
-        integrityPerTujaiLevel: 10,
-        barrierPerTujaiLevel: 5,
-        damagePerTujaiLevel: 2,
+        integrityPerBarracksLevel: 10,
+        barrierPerBarracksLevel: 5,
+        damagePerBarracksLevel: 2,
     },
+}
+
+const STRUCTURE_NAMES = {
+    castle: 'Castle',
+    mine: 'Mine',
+    library: 'Library',
+    archer: 'Archer Tower',
+    catapult: 'Catapult',
+    barracks: 'Barracks',
+}
+
+const RESEARCH_NAMES = {
+    archer: 'Archery',
+    catapult: 'Siege Engineering',
+    barracks: 'Military Training',
+}
+
+const NPC_NAMES = {
+    herald: 'Herald',
+    soldier: 'Soldier',
 }
 
 const PLAYER_COLORS = [
@@ -283,7 +292,7 @@ export default function createGame(options = {}) {
         rooms[hostKey] = room
 
         addPlayerToRoom(room, command)
-        addLog(room, `${getPlayerName(room, command.playerId)} criou a sala ${hostKey}.`)
+        addLog(room, `${getPlayerName(room, command.playerId)} created room ${hostKey}.`)
         debugLog(room, 'match:create', {
             playerId: command.playerId,
             gamerTag: command.gamerTag,
@@ -324,7 +333,7 @@ export default function createGame(options = {}) {
         })
 
         room.hasHadCombatants = Object.keys(room.players).length >= 2
-        addLog(room, `${getPlayerName(room, command.playerId)} entrou na partida.`)
+        addLog(room, `${getPlayerName(room, command.playerId)} joined the match.`)
         debugLog(room, 'match:join-success', {
             playerId: command.playerId,
             gamerTag: command.gamerTag,
@@ -372,7 +381,7 @@ export default function createGame(options = {}) {
             autoplay: true,
         }
         room.hasHadCombatants = Object.keys(room.players).length >= 2
-        addLog(room, `${getPlayerName(room, playerId)} entrou como IA neural.`)
+        addLog(room, `${getPlayerName(room, playerId)} joined as neural AI.`)
         debugLog(room, 'ai:add-player', {
             playerId,
             requestedBy: command.requestedBy,
@@ -399,7 +408,7 @@ export default function createGame(options = {}) {
 
     function enableAutoplay(room, player) {
         if (!aiAgent) {
-            addLog(room, player.gamerTag + ': IA indisponivel para autoplay.')
+            addLog(room, player.gamerTag + ': AI is unavailable for autoplay.')
             return false
         }
 
@@ -480,7 +489,7 @@ export default function createGame(options = {}) {
             debugLog(room, 'move:blocked', {
                 playerId: command.playerId,
                 keyPressed: command.keyPressed,
-                reason: 'partida encerrada',
+                reason: 'match ended',
             })
             return
         }
@@ -490,7 +499,7 @@ export default function createGame(options = {}) {
             debugLog(room, 'move:blocked', {
                 playerId: command.playerId,
                 keyPressed: command.keyPressed,
-                reason: player ? 'jogador aguardando reaparecimento ou fora da partida' : 'jogador nao encontrado',
+                reason: player ? 'player waiting to respawn or out of match' : 'player not found',
             })
             return
         }
@@ -537,7 +546,7 @@ export default function createGame(options = {}) {
                 keyPressed: command.keyPressed,
                 from: { x: player.x, y: player.y },
                 to: { x: nextX, y: nextY },
-                reason: 'estrutura ativa no caminho',
+                reason: 'active structure in path',
                 structure: summarizeStructure(blockingStructure),
             })
             return
@@ -586,14 +595,14 @@ export default function createGame(options = {}) {
         })
 
         if (room.winnerId) {
-            addLog(room, 'A partida ja terminou.')
+            addLog(room, 'The match has already ended.')
             notifyRoomState(room, 'action-denied')
             return false
         }
 
         const player = room.players[command.playerId]
         if (!player || !player.alive) {
-            addLog(room, 'Jogador invalido ou fora da partida.')
+            addLog(room, 'Invalid player or out of match.')
             notifyRoomState(room, 'action-denied')
             return false
         }
@@ -604,7 +613,7 @@ export default function createGame(options = {}) {
         if (command.action === 'toggle-autoplay') {
             changed = toggleAutoplay(room, player, command)
         } else if (player.autoplay && !command.fromAi) {
-            addLog(room, player.gamerTag + ': autoplay ligado. Desligue para emitir comandos manuais.')
+            addLog(room, player.gamerTag + ': autoplay is enabled. Disable it before issuing manual commands.')
         } else if (command.action === 'build') {
             changed = buildStructure(room, player, command)
         } else if (command.action === 'upgrade') {
@@ -615,11 +624,11 @@ export default function createGame(options = {}) {
             changed = spawnNpc(room, player, command)
         } else if (command.action === 'capture') {
             changed = startCaptureOrder(room, player, command)
-        } else if (command.action === 'move-capturer-to') {
+        } else if (command.action === 'move-herald-to') {
             changed = moveCaptureUnitTo(room, player, command)
         } else {
             handled = false
-            addLog(room, player.gamerTag + ': acao desconhecida: ' + (command.action || 'vazia') + '.')
+            addLog(room, player.gamerTag + ': unknown action: ' + (command.action || 'empty') + '.')
         }
 
         debugLog(room, 'action:result', {
@@ -714,10 +723,10 @@ export default function createGame(options = {}) {
             return mask
         }
 
-        const base = room.structures[player.baseId]
+        const castle = room.structures[player.castleId]
 
-        if (base) {
-            markVisibleTile(mask, base.x, base.y)
+        if (castle) {
+            markVisibleTile(mask, castle.x, castle.y)
         }
 
         for (const structure of Object.values(room.structures)) {
@@ -741,7 +750,7 @@ export default function createGame(options = {}) {
         }
 
         if (isPlayerAvailable(player)) {
-            markVisibleRadius(mask, player, getNpcSightRange('capturer'))
+            markVisibleRadius(mask, player, getNpcSightRange('herald'))
         }
 
         return mask
@@ -868,8 +877,8 @@ export default function createGame(options = {}) {
                 Object.assign(publicPlayer, {
                     x: player.x,
                     y: player.y,
-                    coal: player.coal,
-                    knowledge: player.knowledge,
+                    gold: player.gold,
+                    wisdom: player.wisdom,
                     integrity: player.integrity,
                     maxIntegrity: player.maxIntegrity,
                     barrier: player.barrier,
@@ -963,11 +972,11 @@ export default function createGame(options = {}) {
 
         playerRooms[playerId] = room.hostKey
 
-        const base = createStructure(room, {
+        const castle = createStructure(room, {
             ownerId: playerId,
-            type: 'base',
-            x: spawn.baseX,
-            y: spawn.baseY,
+            type: 'castle',
+            x: spawn.castleX,
+            y: spawn.castleY,
         })
 
         room.players[playerId] = {
@@ -979,11 +988,11 @@ export default function createGame(options = {}) {
             autoplay: Boolean(command.isAi),
             x: spawn.playerX,
             y: spawn.playerY,
-            coal: CONFIG.initialCoal,
-            knowledge: 0,
+            gold: CONFIG.initialGold,
+            wisdom: 0,
             alive: true,
             connected: command.connected ?? true,
-            baseId: base.structureId,
+            castleId: castle.structureId,
             maxIntegrity: CONFIG.playerMaxIntegrity,
             integrity: CONFIG.playerMaxIntegrity,
             maxBarrier: CONFIG.playerMaxBarrier,
@@ -996,11 +1005,11 @@ export default function createGame(options = {}) {
                 structures: {},
             },
             unlocked: {
-                cover: true,
-                taraque: false,
-                per: false,
-                hef: false,
-                tujai: false,
+                mine: true,
+                library: false,
+                archer: false,
+                catapult: false,
+                barracks: false,
             },
             lastMovedAt: now,
             lastAttackAt: 0,
@@ -1034,11 +1043,11 @@ export default function createGame(options = {}) {
 
     function addNeutralFactories(room) {
         const neutralFactories = [
-            { type: 'cover', x: Math.floor(SCREEN.width / 2), y: Math.floor(SCREEN.height / 2) },
-            { type: 'cover', x: Math.floor(SCREEN.width / 2) - 8, y: Math.floor(SCREEN.height / 2) },
-            { type: 'cover', x: Math.floor(SCREEN.width / 2) + 8, y: Math.floor(SCREEN.height / 2) },
-            { type: 'cover', x: Math.floor(SCREEN.width / 2), y: Math.floor(SCREEN.height / 2) - 7 },
-            { type: 'cover', x: Math.floor(SCREEN.width / 2), y: Math.floor(SCREEN.height / 2) + 7 },
+            { type: 'mine', x: Math.floor(SCREEN.width / 2), y: Math.floor(SCREEN.height / 2) },
+            { type: 'mine', x: Math.floor(SCREEN.width / 2) - 8, y: Math.floor(SCREEN.height / 2) },
+            { type: 'mine', x: Math.floor(SCREEN.width / 2) + 8, y: Math.floor(SCREEN.height / 2) },
+            { type: 'mine', x: Math.floor(SCREEN.width / 2), y: Math.floor(SCREEN.height / 2) - 7 },
+            { type: 'mine', x: Math.floor(SCREEN.width / 2), y: Math.floor(SCREEN.height / 2) + 7 },
         ]
 
         for (const factory of neutralFactories) {
@@ -1054,6 +1063,18 @@ export default function createGame(options = {}) {
             structure.barrier = 0
         }
     }
+
+function getStructureName(type) {
+    return STRUCTURE_NAMES[type] || type || 'Structure'
+}
+
+function getResearchName(type) {
+    return RESEARCH_NAMES[type] || type || 'Research'
+}
+
+function getNpcName(type) {
+    return NPC_NAMES[type] || type || 'Unit'
+}
 
     function createStructure(room, command) {
         const catalog = STRUCTURES[command.type]
@@ -1090,7 +1111,7 @@ export default function createGame(options = {}) {
         const catalog = STRUCTURES[type]
 
         if (!catalog || !catalog.buildable) {
-            addLog(room, `${player.gamerTag}: construcao invalida.`)
+            addLog(room, `${player.gamerTag}: invalid structure.`)
             return false
         }
 
@@ -1098,38 +1119,38 @@ export default function createGame(options = {}) {
 
         if (limitStatus && limitStatus.current >= limitStatus.max) {
             const reason = limitStatus.current > limitStatus.max
-                ? 'sem novos slots ate cair abaixo do limite'
-                : 'suba a Base para liberar'
-            addLog(room, `${player.gamerTag}: ${catalog.label} ${limitStatus.current}/${limitStatus.max} - ${reason}.`)
+                ? 'no new slots until count drops below the limit'
+                : 'upgrade the castle to unlock more'
+            addLog(room, `${player.gamerTag}: ${getStructureName(type)} ${limitStatus.current}/${limitStatus.max} - ${reason}.`)
             return false
         }
 
         if (!canBuildStructure(room, player, type)) {
-            addLog(room, `${player.gamerTag} ainda nao liberou ${catalog.label}.`)
+            addLog(room, `${player.gamerTag} has not unlocked ${getStructureName(type)} yet.`)
             return false
         }
 
         if (!Number.isInteger(command.x) || !Number.isInteger(command.y) || !isInsideMap(command.x, command.y)) {
-            addLog(room, `${player.gamerTag}: terreno invalido.`)
+            addLog(room, `${player.gamerTag}: invalid tile.`)
             return false
         }
 
         if (getStructureAt(room, command.x, command.y) || getActorAt(room, command.x, command.y)) {
-            addLog(room, `${player.gamerTag}: terreno ocupado.`)
+            addLog(room, `${player.gamerTag}: tile occupied.`)
             return false
         }
 
         if (!isNearOwnedAnchor(room, player.playerId, command.x, command.y)) {
-            addLog(room, `${player.gamerTag}: construa perto da sua base ou estruturas.`)
+            addLog(room, `${player.gamerTag}: build near your castle or structures.`)
             return false
         }
 
-        if (player.coal < catalog.cost) {
-            addLog(room, `${player.gamerTag} precisa de ${catalog.cost} carvoes para ${catalog.label}.`)
+        if (player.gold < catalog.cost) {
+            addLog(room, `${player.gamerTag} needs ${catalog.cost} gold for ${getStructureName(type)}.`)
             return false
         }
 
-        player.coal -= catalog.cost
+        player.gold -= catalog.cost
         createStructure(room, {
             ownerId: player.playerId,
             type,
@@ -1137,7 +1158,7 @@ export default function createGame(options = {}) {
             y: command.y,
         })
 
-        addLog(room, `${player.gamerTag} construiu ${catalog.label}.`)
+        addLog(room, `${player.gamerTag} built ${getStructureName(type)}.`)
         return true
     }
 
@@ -1145,62 +1166,62 @@ export default function createGame(options = {}) {
         const structure = room.structures[command.structureId]
 
         if (!structure) {
-            addLog(room, player.gamerTag + ': nenhuma construcao selecionada para upgrade.')
+            addLog(room, player.gamerTag + ': no structure selected for upgrade.')
             debugLog(room, 'upgrade:denied', {
                 player: summarizePlayer(player),
                 structureId: command.structureId,
-                reason: 'estrutura nao encontrada',
+                reason: 'structure not found',
             })
             return false
         }
 
         if (structure.ownerId !== player.playerId) {
-            addLog(room, player.gamerTag + ': selecione uma construcao sua para upgrade.')
+            addLog(room, player.gamerTag + ': select one of your structures to upgrade.')
             debugLog(room, 'upgrade:denied', {
                 player: summarizePlayer(player),
                 structure: summarizeStructure(structure),
-                reason: 'estrutura de outro dono',
+                reason: 'structure owned by another player',
             })
             return false
         }
 
         if (structure.disabled) {
-            addLog(room, player.gamerTag + ': esta construcao esta desativada.')
+            addLog(room, player.gamerTag + ': this structure is disabled.')
             debugLog(room, 'upgrade:denied', {
                 player: summarizePlayer(player),
                 structure: summarizeStructure(structure),
-                reason: 'estrutura desativada',
+                reason: 'structure disabled',
             })
             return false
         }
 
-        if (structure.type !== 'base') {
-            const base = room.structures[player.baseId]
+        if (structure.type !== 'castle') {
+            const castle = room.structures[player.castleId]
 
-            if (!base || structure.level >= base.level) {
-                const baseLevel = base ? base.level : 0
-                addLog(room, `${player.gamerTag}: ${STRUCTURES[structure.type].label} ja esta no nivel maximo permitido pela Base (lvl ${baseLevel}). Suba a Base para liberar.`)
+            if (!castle || structure.level >= castle.level) {
+                const castleLevel = castle ? castle.level : 0
+                addLog(room, `${player.gamerTag}: ${getStructureName(structure.type)} is already at the max level allowed by the castle (lvl ${castleLevel}). Upgrade the castle to unlock more.`)
                 debugLog(room, 'upgrade:denied', {
                     player: summarizePlayer(player),
                     structure: summarizeStructure(structure),
-                    baseLevel,
-                    reason: 'limite de nivel da base',
+                    castleLevel,
+                    reason: 'castle level limit',
                 })
                 return false
             }
         }
 
-        if (structure.type === 'base') {
-            const gate = computeBaseUpgradeGate(room, player.playerId, structure.level)
+        if (structure.type === 'castle') {
+            const gate = computeCastleUpgradeGate(room, player.playerId, structure.level)
 
             if (!gate.ready) {
-                addLog(room, `${player.gamerTag}: Base bloqueada - media de estruturas ${gate.averageLevel.toFixed(2)} < ${gate.required.toFixed(2)} (${Math.round(gate.ratio * 100)}% do nivel atual).`)
+                addLog(room, `${player.gamerTag}: castle upgrade blocked - average structure level ${gate.averageLevel.toFixed(2)} < ${gate.required.toFixed(2)} (${Math.round(gate.ratio * 100)}% of current level).`)
                 debugLog(room, 'upgrade:denied', {
                     player: summarizePlayer(player),
                     structure: summarizeStructure(structure),
                     averageLevel: gate.averageLevel,
                     required: gate.required,
-                    reason: 'gate de upgrade da base',
+                    reason: 'castle upgrade gate',
                 })
                 return false
             }
@@ -1208,14 +1229,14 @@ export default function createGame(options = {}) {
 
         const cost = getUpgradeCost(structure)
 
-        if (player.coal < cost) {
-            addLog(room, player.gamerTag + ' precisa de ' + cost + ' carvoes para melhorar ' + STRUCTURES[structure.type].label + '; possui ' + Math.floor(player.coal) + '.')
+        if (player.gold < cost) {
+            addLog(room, player.gamerTag + ' needs ' + cost + ' gold to upgrade ' + getStructureName(structure.type) + '; has ' + Math.floor(player.gold) + '.')
             debugLog(room, 'upgrade:denied', {
                 player: summarizePlayer(player),
                 structure: summarizeStructure(structure),
                 cost,
-                coal: player.coal,
-                reason: 'carvao insuficiente',
+                gold: player.gold,
+                reason: 'not enough gold',
             })
             return false
         }
@@ -1226,7 +1247,7 @@ export default function createGame(options = {}) {
             cost,
         })
 
-        player.coal -= cost
+        player.gold -= cost
         structure.level += 1
 
         const oldMaxIntegrity = structure.maxIntegrity
@@ -1237,11 +1258,11 @@ export default function createGame(options = {}) {
         structure.integrity += structure.maxIntegrity - oldMaxIntegrity
         structure.barrier += structure.maxBarrier - oldMaxBarrier
 
-        if (structure.type === 'base' && structure.level >= 2) {
-            player.unlocked.taraque = true
+        if (structure.type === 'castle' && structure.level >= 2) {
+            player.unlocked.library = true
         }
 
-        addLog(room, player.gamerTag + ' melhorou ' + STRUCTURES[structure.type].label + ' para nivel ' + structure.level + '.')
+        addLog(room, player.gamerTag + ' upgraded ' + getStructureName(structure.type) + ' to level ' + structure.level + '.')
         debugLog(room, 'upgrade:success', {
             player: summarizePlayer(player),
             structureAfter: summarizeStructure(structure),
@@ -1258,65 +1279,65 @@ export default function createGame(options = {}) {
         }
 
         if (player.unlocked[recipe]) {
-            addLog(room, `${player.gamerTag} ja liberou ${research.label}.`)
+            addLog(room, `${player.gamerTag} already unlocked ${getResearchName(recipe)}.`)
             return false
         }
 
-        const taraqueLevel = getHighestStructureLevel(room, player.playerId, 'taraque')
+        const libraryLevel = getHighestStructureLevel(room, player.playerId, 'library')
 
-        if (taraqueLevel < research.requiresTaraqueLevel) {
-            addLog(room, `${player.gamerTag} precisa de Taraque nivel ${research.requiresTaraqueLevel}.`)
+        if (libraryLevel < research.requiresLibraryLevel) {
+            addLog(room, `${player.gamerTag} needs Library level ${research.requiresLibraryLevel}.`)
             return false
         }
 
-        if (player.knowledge < research.cost) {
-            addLog(room, `${player.gamerTag} precisa de ${research.cost} conhecimentos para ${research.label}.`)
+        if (player.wisdom < research.cost) {
+            addLog(room, `${player.gamerTag} needs ${research.cost} wisdom for ${getResearchName(recipe)}.`)
             return false
         }
 
-        player.knowledge -= research.cost
+        player.wisdom -= research.cost
         player.unlocked[recipe] = true
 
-        addLog(room, `${player.gamerTag} pesquisou ${research.label}.`)
+        addLog(room, `${player.gamerTag} researched ${getResearchName(recipe)}.`)
         return true
     }
 
     function spawnNpc(room, player, command) {
-        const npcType = command.npcType || 'zunim'
+        const npcType = command.npcType || 'soldier'
         const npc = NPCS[npcType]
 
-        if (!npc || !player.unlocked.tujai) {
-            addLog(room, `${player.gamerTag}: NPC indisponivel.`)
+        if (!npc || !player.unlocked.barracks) {
+            addLog(room, `${player.gamerTag}: NPC unavailable.`)
             return false
         }
 
-        const tujai = getActiveStructures(room, player.playerId, 'tujai')[0]
+        const barracks = getActiveStructures(room, player.playerId, 'barracks')[0]
 
-        if (!tujai) {
-            addLog(room, `${player.gamerTag} precisa de uma Tujai ativa.`)
+        if (!barracks) {
+            addLog(room, `${player.gamerTag} needs an active Barracks.`)
             return false
         }
 
-        if (player.coal < npc.cost) {
-            addLog(room, `${player.gamerTag} precisa de ${npc.cost} carvoes para Zunim.`)
+        if (player.gold < npc.cost) {
+            addLog(room, `${player.gamerTag} needs ${npc.cost} gold for ${getNpcName(npcType)}.`)
             return false
         }
 
-        const spawnTile = getEmptyNeighbor(room, tujai.x, tujai.y)
+        const spawnTile = getEmptyNeighbor(room, barracks.x, barracks.y)
 
         if (!spawnTile) {
-            addLog(room, `${player.gamerTag}: sem espaco ao redor da Tujai.`)
+            addLog(room, `${player.gamerTag}: no space around the Barracks.`)
             return false
         }
 
-        const tujaiLevel = getHighestStructureLevel(room, player.playerId, 'tujai')
-        const levelBonus = Math.max(0, tujaiLevel - 1)
-        const maxIntegrity = npc.integrity + levelBonus * npc.integrityPerTujaiLevel
-        const maxBarrier = npc.barrier + levelBonus * npc.barrierPerTujaiLevel
-        const damage = npc.damage + levelBonus * npc.damagePerTujaiLevel
+        const barracksLevel = getHighestStructureLevel(room, player.playerId, 'barracks')
+        const levelBonus = Math.max(0, barracksLevel - 1)
+        const maxIntegrity = npc.integrity + levelBonus * npc.integrityPerBarracksLevel
+        const maxBarrier = npc.barrier + levelBonus * npc.barrierPerBarracksLevel
+        const damage = npc.damage + levelBonus * npc.damagePerBarracksLevel
         const unitId = `u-${room.nextUnitId++}`
 
-        player.coal -= npc.cost
+        player.gold -= npc.cost
         room.units[unitId] = {
             unitId,
             ownerId: player.playerId,
@@ -1333,26 +1354,26 @@ export default function createGame(options = {}) {
             createdAt: Date.now(),
         }
 
-        addLog(room, `${player.gamerTag} enviou um Zunim.`)
+        addLog(room, `${player.gamerTag} sent a ${getNpcName(npcType)}.`)
         return true
     }
 
 
     function moveCaptureUnitTo(room, player, command) {
         if (!isPlayerCommandable(player)) {
-            addLog(room, player.gamerTag + ': aguarde o reaparecimento para mover o Capturador.')
+            addLog(room, player.gamerTag + ': wait for respawn before moving the Herald.')
             return false
         }
 
         if (!Number.isInteger(command.x) || !Number.isInteger(command.y) || !isInsideMap(command.x, command.y)) {
-            addLog(room, player.gamerTag + ': destino invalido para o Capturador.')
+            addLog(room, player.gamerTag + ': invalid Herald destination.')
             return false
         }
 
         const captureUnit = getPlayerCaptureUnit(room, player) || spawnCaptureUnit(room, player)
 
         if (!captureUnit) {
-            addLog(room, player.gamerTag + ': sem espaco livre perto da Base para mover o Capturador.')
+            addLog(room, player.gamerTag + ': no free space near the Castle to move the Herald.')
             return false
         }
 
@@ -1369,7 +1390,7 @@ export default function createGame(options = {}) {
         player.activeCaptureUnitId = captureUnit.unitId
         syncPlayerToCaptureUnit(player, captureUnit)
         resetCapturesForPlayer(room, player.playerId)
-        addLog(room, player.gamerTag + ' moveu o Capturador para reconhecimento.')
+        addLog(room, player.gamerTag + ' moved the Herald to scout.')
         return true
     }
 
@@ -1377,36 +1398,36 @@ export default function createGame(options = {}) {
         const structure = room.structures[command.structureId]
 
         if (!structure) {
-            addLog(room, player.gamerTag + ': selecione uma construcao capturavel.')
+            addLog(room, player.gamerTag + ': select a capturable structure.')
             return false
         }
 
         const catalog = STRUCTURES[structure.type]
 
         if (!catalog || !catalog.captureable) {
-            addLog(room, player.gamerTag + ': esta construcao nao pode ser capturada.')
+            addLog(room, player.gamerTag + ': this structure cannot be captured.')
             return false
         }
 
         if (!isPlayerCommandable(player)) {
-            addLog(room, player.gamerTag + ': aguarde o reaparecimento para iniciar captura.')
+            addLog(room, player.gamerTag + ': wait for respawn before starting capture.')
             return false
         }
 
         if (structure.ownerId === player.playerId && !structure.disabled) {
-            addLog(room, player.gamerTag + ': esta construcao ja e sua.')
+            addLog(room, player.gamerTag + ': this structure is already yours.')
             return false
         }
 
         if (structure.ownerId === player.playerId && structure.disabled) {
-            addLog(room, player.gamerTag + ': esta construcao sua esta desativada.')
+            addLog(room, player.gamerTag + ': your structure is disabled.')
             return false
         }
 
         const captureUnit = getPlayerCaptureUnit(room, player) || spawnCaptureUnit(room, player)
 
         if (!captureUnit) {
-            addLog(room, player.gamerTag + ': sem espaco livre perto da Base para enviar o Capturador.')
+            addLog(room, player.gamerTag + ': no free space near the Castle to send the Herald.')
             return false
         }
 
@@ -1422,7 +1443,7 @@ export default function createGame(options = {}) {
         player.activeCaptureUnitId = captureUnit.unitId
         syncPlayerToCaptureUnit(player, captureUnit)
         resetCapturesForPlayer(room, player.playerId)
-        addLog(room, player.gamerTag + ' enviou um Capturador para ' + catalog.label + '.')
+        addLog(room, player.gamerTag + ' sent a Herald to ' + getStructureName(structure.type) + '.')
         return true
     }
 
@@ -1437,14 +1458,14 @@ export default function createGame(options = {}) {
     }
 
     function createCaptureUnit(room, player, spawnTile) {
-        const catalog = NPCS.capturer
+        const catalog = NPCS.herald
         const unitId = 'u-' + room.nextUnitId++
         const unit = {
             unitId,
             ownerId: player.playerId,
             playerId: player.playerId,
             gamerTag: player.gamerTag,
-            type: 'capturer',
+            type: 'herald',
             x: spawnTile.x,
             y: spawnTile.y,
             integrity: catalog.integrity,
@@ -1486,7 +1507,7 @@ export default function createGame(options = {}) {
             player.respawnAt = null
             player.order = null
             syncPlayerToCaptureUnit(player, captureUnit)
-            addLog(room, player.gamerTag + ' reapareceu na base.')
+            addLog(room, player.gamerTag + ' respawned at the castle.')
             changed = true
         }
 
@@ -1499,7 +1520,7 @@ export default function createGame(options = {}) {
         for (const unitId in room.units) {
             const unit = room.units[unitId]
 
-            if (unit.type !== 'capturer') {
+            if (unit.type !== 'herald') {
                 continue
             }
 
@@ -1583,7 +1604,7 @@ export default function createGame(options = {}) {
                 continue
             }
 
-            if (candidate.type === 'capturer' && distance(candidate, structure) <= CONFIG.captureRange) {
+            if (candidate.type === 'herald' && distance(candidate, structure) <= CONFIG.captureRange) {
                 candidates.push({ kind: 'unit', value: candidate })
             }
         }
@@ -1613,7 +1634,7 @@ export default function createGame(options = {}) {
             unit.y = nextTile.y
             syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
 
-            if (unit.type === 'capturer') {
+            if (unit.type === 'herald') {
                 resetCapturesForPlayer(room, unit.ownerId)
             }
 
@@ -1678,7 +1699,7 @@ export default function createGame(options = {}) {
             return false
         }
 
-        const decide = aiAgent.decide || aiAgent.decidir
+        const decide = aiAgent.decide
 
         if (typeof decide !== 'function') {
             return false
@@ -1743,13 +1764,13 @@ export default function createGame(options = {}) {
                 continue
             }
 
-            if (structure.type === 'cover') {
-                player.coal += getCoalRate(structure)
+            if (structure.type === 'mine') {
+                player.gold += getGoldRate(structure)
                 changed = true
             }
 
-            if (structure.type === 'taraque') {
-                player.knowledge += getKnowledgeRate(structure)
+            if (structure.type === 'library') {
+                player.wisdom += getWisdomRate(structure)
                 changed = true
             }
         }
@@ -1873,7 +1894,7 @@ export default function createGame(options = {}) {
             }
 
             structure.lastAttackAt = now
-            if (structure.type === 'hef') {
+            if (structure.type === 'catapult') {
                 applySplashDamage(room, structure, target, catalog.damage, now)
             } else {
                 applyDamage(room, target, catalog.damage, now, structure.ownerId)
@@ -1898,30 +1919,30 @@ export default function createGame(options = {}) {
                 continue
             }
 
-            if (unit.type === 'capturer') {
+            if (unit.type === 'herald') {
                 continue
             }
 
-            const targetBase = getNearestEnemyBase(room, unit.ownerId, unit.x, unit.y)
+            const targetCastle = getNearestEnemyCastle(room, unit.ownerId, unit.x, unit.y)
 
-            if (!targetBase) {
+            if (!targetCastle) {
                 continue
             }
 
             const npc = NPCS[unit.type]
-            const distanceToTarget = distance(unit, targetBase)
+            const distanceToTarget = distance(unit, targetCastle)
 
             if (distanceToTarget <= npc.attackRange) {
                 if (now - unit.lastAttackAt >= npc.attackEveryMs) {
                     unit.lastAttackAt = now
-                    applyDamage(room, { kind: 'structure', value: targetBase }, unit.damage, now, unit.ownerId)
+                    applyDamage(room, { kind: 'structure', value: targetCastle }, unit.damage, now, unit.ownerId)
                     changed = true
                 }
 
                 continue
             }
 
-            if (moveUnitToward(room, unit, targetBase, npc.attackRange, now)) {
+            if (moveUnitToward(room, unit, targetCastle, npc.attackRange, now)) {
                 changed = true
             }
         }
@@ -1938,15 +1959,15 @@ export default function createGame(options = {}) {
 
         if (alivePlayers.length === 1) {
             room.winnerId = alivePlayers[0].playerId
-            addLog(room, `${alivePlayers[0].gamerTag} venceu a partida.`)
+            addLog(room, `${alivePlayers[0].gamerTag} won the match.`)
             return true
         }
 
         return false
     }
 
-    function captureStructure(room, structure, capturer) {
-        const player = room.players[capturer.playerId || capturer.ownerId]
+    function captureStructure(room, structure, herald) {
+        const player = room.players[herald.playerId || herald.ownerId]
 
         if (!player) {
             return
@@ -1959,21 +1980,21 @@ export default function createGame(options = {}) {
         structure.barrier = Math.ceil(structure.maxBarrier * 0.5)
         structure.lastDamagedAt = Date.now()
 
-        if (capturer.order && capturer.order.type === 'capture' && capturer.order.structureId === structure.structureId) {
-            capturer.order = null
+        if (herald.order && herald.order.type === 'capture' && herald.order.structureId === structure.structureId) {
+            herald.order = null
         }
 
         if (player.order && player.order.type === 'capture' && player.order.structureId === structure.structureId) {
             player.order = null
         }
 
-        addLog(room, player.gamerTag + ' capturou ' + STRUCTURES[structure.type].label + '.')
+        addLog(room, player.gamerTag + ' captured ' + getStructureName(structure.type) + '.')
     }
 
     function applySplashDamage(room, sourceStructure, target, damage, now) {
         const splashTargets = collectDamageableTargets(room)
             .filter(candidate => getDamageableOwnerId(candidate) !== sourceStructure.ownerId)
-            .filter(candidate => distance(candidate.value, target.value) <= STRUCTURES.hef.splashRadius)
+            .filter(candidate => distance(candidate.value, target.value) <= STRUCTURES.catapult.splashRadius)
 
         for (const splashTarget of splashTargets) {
             applyDamage(room, splashTarget, damage, now, sourceStructure.ownerId)
@@ -2016,8 +2037,8 @@ export default function createGame(options = {}) {
         player.order = null
         resetCapturesForPlayer(room, player.playerId)
 
-        const attackerName = attackerId ? getPlayerName(room, attackerId) : 'o combate'
-        addLog(room, player.gamerTag + ' caiu para ' + attackerName + ' e reaparece na base em ' + Math.ceil(CONFIG.respawnDelayMs / 1000) + 's.')
+        const attackerName = attackerId ? getPlayerName(room, attackerId) : 'combat'
+        addLog(room, player.gamerTag + ' fell to ' + attackerName + ' and respawns at the castle in ' + Math.ceil(CONFIG.respawnDelayMs / 1000) + 's.')
     }
 
     function applyDamageToUnit(room, unit, amount, now, attackerId) {
@@ -2028,7 +2049,7 @@ export default function createGame(options = {}) {
         syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
 
         if (unit.integrity <= 0) {
-            if (unit.type === 'capturer') {
+            if (unit.type === 'herald') {
                 knockOutCaptureUnit(room, unit, now, attackerId)
                 return
             }
@@ -2053,8 +2074,8 @@ export default function createGame(options = {}) {
         player.avatarDeployed = false
         resetCapturesForPlayer(room, player.playerId)
 
-        const attackerName = attackerId ? getPlayerName(room, attackerId) : 'o combate'
-        addLog(room, player.gamerTag + ' perdeu o Capturador para ' + attackerName + ' e reaparece na base em ' + Math.ceil(CONFIG.respawnDelayMs / 1000) + 's.')
+        const attackerName = attackerId ? getPlayerName(room, attackerId) : 'combat'
+        addLog(room, player.gamerTag + ' lost the Herald to ' + attackerName + ' and respawns at the castle in ' + Math.ceil(CONFIG.respawnDelayMs / 1000) + 's.')
     }
 
     function applyDamageToStructure(room, structure, amount, now, attackerId, options = {}) {
@@ -2071,7 +2092,7 @@ export default function createGame(options = {}) {
             return
         }
 
-        if (structure.type === 'base') {
+        if (structure.type === 'castle') {
             eliminatePlayer(room, structure.ownerId, attackerId)
             return
         }
@@ -2085,16 +2106,16 @@ export default function createGame(options = {}) {
         structure.barrier = 0
         structure.disabled = true
         structure.capture = null
-        addLog(room, `${STRUCTURES[structure.type].label} de ${getPlayerName(room, structure.ownerId)} foi desativada.`)
+        addLog(room, `${getStructureName(structure.type)} owned by ${getPlayerName(room, structure.ownerId)} was disabled.`)
     }
 
     function removeStructure(room, structure) {
-        const label = STRUCTURES[structure.type]?.label || 'Construcao'
+        const label = getStructureName(structure.type)
         const ownerName = getPlayerName(room, structure.ownerId)
 
         clearOrdersForStructure(room, structure.structureId)
         delete room.structures[structure.structureId]
-        addLog(room, `${label} de ${ownerName} foi destruida.`)
+        addLog(room, `${label} owned by ${ownerName} was destroyed.`)
     }
 
     function clearOrdersForStructure(room, structureId) {
@@ -2123,24 +2144,24 @@ export default function createGame(options = {}) {
         }
 
         player.alive = false
-        player.coal = 0
-        player.knowledge = 0
+        player.gold = 0
+        player.wisdom = 0
         player.integrity = 0
         player.barrier = 0
         player.respawnAt = null
         player.order = null
 
-        const base = room.structures[player.baseId]
-        if (base) {
-            base.integrity = 0
-            base.barrier = 0
-            base.disabled = true
+        const castle = room.structures[player.castleId]
+        if (castle) {
+            castle.integrity = 0
+            castle.barrier = 0
+            castle.disabled = true
         }
 
         for (const structureId in room.structures) {
             const structure = room.structures[structureId]
 
-            if (structure.ownerId === playerId && structure.type !== 'base') {
+            if (structure.ownerId === playerId && structure.type !== 'castle') {
                 structure.disabled = true
                 structure.integrity = 0
                 structure.barrier = 0
@@ -2154,8 +2175,8 @@ export default function createGame(options = {}) {
             }
         }
 
-        const attackerName = attackerId ? getPlayerName(room, attackerId) : 'o combate'
-        addLog(room, `${player.gamerTag} perdeu a base para ${attackerName}.`)
+        const attackerName = attackerId ? getPlayerName(room, attackerId) : 'combat'
+        addLog(room, `${player.gamerTag} lost the castle to ${attackerName}.`)
         checkVictory(room)
     }
 
@@ -2215,9 +2236,9 @@ export default function createGame(options = {}) {
         return target.value.ownerId
     }
 
-    function getNearestEnemyBase(room, ownerId, x, y) {
+    function getNearestEnemyCastle(room, ownerId, x, y) {
         const bases = Object.values(room.structures)
-            .filter(structure => structure.type === 'base')
+            .filter(structure => structure.type === 'castle')
             .filter(structure => structure.ownerId !== ownerId)
             .filter(structure => !structure.disabled)
             .filter(structure => room.players[structure.ownerId] && room.players[structure.ownerId].alive)
@@ -2335,7 +2356,7 @@ export default function createGame(options = {}) {
 
     function getCaptureCandidate(room, structure) {
         const candidates = Object.values(room.units)
-            .filter(unit => unit.type === 'capturer')
+            .filter(unit => unit.type === 'herald')
             .filter(unit => unit.ownerId !== structure.ownerId)
             .filter(unit => unit.order && unit.order.type === 'capture')
             .filter(unit => unit.order.structureId === structure.structureId)
@@ -2363,11 +2384,11 @@ export default function createGame(options = {}) {
         }
 
         return Object.values(room.units)
-            .find(unit => unit.type === 'capturer' && unit.ownerId === player.playerId) || null
+            .find(unit => unit.type === 'herald' && unit.ownerId === player.playerId) || null
     }
 
     function syncPlayerToCaptureUnit(player, unit) {
-        if (!player || !unit || unit.type !== 'capturer') {
+        if (!player || !unit || unit.type !== 'herald') {
             return
         }
 
@@ -2389,9 +2410,9 @@ export default function createGame(options = {}) {
             return false
         }
 
-        const base = room.structures[player.baseId]
+        const castle = room.structures[player.castleId]
 
-        if (!base) {
+        if (!castle) {
             return false
         }
 
@@ -2401,12 +2422,12 @@ export default function createGame(options = {}) {
             return false
         }
 
-        if (type === 'cover') {
+        if (type === 'mine') {
             return true
         }
 
-        if (catalog.requiresBaseLevel) {
-            return base.level >= catalog.requiresBaseLevel
+        if (catalog.requiresCastleLevel) {
+            return castle.level >= catalog.requiresCastleLevel
         }
 
         if (catalog.requiresResearch) {
@@ -2417,26 +2438,26 @@ export default function createGame(options = {}) {
     }
 
     function getBuildLimitStatus(room, player, type) {
-        const base = room.structures[player.baseId]
+        const castle = room.structures[player.castleId]
 
-        if (!base) {
+        if (!castle) {
             return null
         }
 
         return {
             current: countActiveOwnedStructures(room, player.playerId, type),
-            max: getBuildLimit(type, base.level),
+            max: getBuildLimit(type, castle.level),
         }
     }
 
-    function getBuildLimit(type, baseLevel) {
+    function getBuildLimit(type, castleLevel) {
         const catalog = STRUCTURES[type]
 
         if (!catalog || !catalog.buildable) {
             return 0
         }
 
-        const level = Math.max(1, Math.floor(Number(baseLevel) || 1))
+        const level = Math.max(1, Math.floor(Number(castleLevel) || 1))
         return catalog.buildLimitBase + catalog.buildLimitSlope * (level - 1)
     }
 
@@ -2450,24 +2471,24 @@ export default function createGame(options = {}) {
 
     function computePlayerLimits(room, playerId) {
         const player = room.players[playerId]
-        const base = player ? room.structures[player.baseId] : null
+        const castle = player ? room.structures[player.castleId] : null
         const limits = {}
 
         for (const type of Object.keys(STRUCTURES).filter(candidate => STRUCTURES[candidate].buildable)) {
             limits[type] = {
                 current: countActiveOwnedStructures(room, playerId, type),
-                max: base ? getBuildLimit(type, base.level) : 0,
+                max: castle ? getBuildLimit(type, castle.level) : 0,
             }
         }
 
-        limits.baseUpgrade = computeBaseUpgradeGate(room, playerId, base ? base.level : 0)
+        limits.castleUpgrade = computeCastleUpgradeGate(room, playerId, castle ? castle.level : 0)
         return limits
     }
 
     function computeAverageStructureLevel(room, playerId) {
         const owned = Object.values(room.structures)
             .filter(structure => structure.ownerId === playerId)
-            .filter(structure => structure.type !== 'base')
+            .filter(structure => structure.type !== 'castle')
             .filter(structure => !structure.disabled)
 
         if (owned.length === 0) {
@@ -2478,14 +2499,14 @@ export default function createGame(options = {}) {
         return sum / owned.length
     }
 
-    function computeBaseUpgradeGate(room, playerId, baseLevel) {
+    function computeCastleUpgradeGate(room, playerId, castleLevel) {
         const averageLevel = computeAverageStructureLevel(room, playerId)
-        const required = baseLevel * CONFIG.baseUpgradeAverageRatio
+        const required = castleLevel * CONFIG.castleUpgradeAverageRatio
 
         return {
             averageLevel,
             required,
-            ratio: CONFIG.baseUpgradeAverageRatio,
+            ratio: CONFIG.castleUpgradeAverageRatio,
             ready: averageLevel >= required,
         }
     }
@@ -2536,13 +2557,13 @@ export default function createGame(options = {}) {
     }
 
     function getRespawnTile(room, player) {
-        const base = room.structures[player.baseId]
+        const castle = room.structures[player.castleId]
 
-        if (!base || base.disabled) {
+        if (!castle || castle.disabled) {
             return null
         }
 
-        return getEmptyNeighbor(room, base.x, base.y) || getEmptyTileNear(room, base.x, base.y, Math.max(SCREEN.width, SCREEN.height))
+        return getEmptyNeighbor(room, castle.x, castle.y) || getEmptyTileNear(room, castle.x, castle.y, Math.max(SCREEN.width, SCREEN.height))
     }
 
     function getEmptyTileNear(room, x, y, maxRadius) {
@@ -2621,14 +2642,14 @@ export default function createGame(options = {}) {
 
     function getSpawnPoint(index) {
         const spawns = [
-            { baseX: 4, baseY: 4, playerX: 6, playerY: 4 },
-            { baseX: SCREEN.width - 5, baseY: SCREEN.height - 5, playerX: SCREEN.width - 7, playerY: SCREEN.height - 5 },
-            { baseX: SCREEN.width - 5, baseY: 4, playerX: SCREEN.width - 7, playerY: 4 },
-            { baseX: 4, baseY: SCREEN.height - 5, playerX: 6, playerY: SCREEN.height - 5 },
-            { baseX: Math.floor(SCREEN.width / 2), baseY: 4, playerX: Math.floor(SCREEN.width / 2), playerY: 6 },
-            { baseX: Math.floor(SCREEN.width / 2), baseY: SCREEN.height - 5, playerX: Math.floor(SCREEN.width / 2), playerY: SCREEN.height - 7 },
-            { baseX: 4, baseY: Math.floor(SCREEN.height / 2), playerX: 6, playerY: Math.floor(SCREEN.height / 2) },
-            { baseX: SCREEN.width - 5, baseY: Math.floor(SCREEN.height / 2), playerX: SCREEN.width - 7, playerY: Math.floor(SCREEN.height / 2) },
+            { castleX: 4, castleY: 4, playerX: 6, playerY: 4 },
+            { castleX: SCREEN.width - 5, castleY: SCREEN.height - 5, playerX: SCREEN.width - 7, playerY: SCREEN.height - 5 },
+            { castleX: SCREEN.width - 5, castleY: 4, playerX: SCREEN.width - 7, playerY: 4 },
+            { castleX: 4, castleY: SCREEN.height - 5, playerX: 6, playerY: SCREEN.height - 5 },
+            { castleX: Math.floor(SCREEN.width / 2), castleY: 4, playerX: Math.floor(SCREEN.width / 2), playerY: 6 },
+            { castleX: Math.floor(SCREEN.width / 2), castleY: SCREEN.height - 5, playerX: Math.floor(SCREEN.width / 2), playerY: SCREEN.height - 7 },
+            { castleX: 4, castleY: Math.floor(SCREEN.height / 2), playerX: 6, playerY: Math.floor(SCREEN.height / 2) },
+            { castleX: SCREEN.width - 5, castleY: Math.floor(SCREEN.height / 2), playerX: SCREEN.width - 7, playerY: Math.floor(SCREEN.height / 2) },
         ]
 
         return spawns[index % spawns.length]
@@ -2637,7 +2658,7 @@ export default function createGame(options = {}) {
     function getMaxIntegrity(type, level) {
         const catalog = STRUCTURES[type]
         const explicitBonus = catalog.integrityPerLevel || 0
-        const genericBonus = type === 'base' ? 0 : Math.ceil(catalog.integrity * 0.1) * (level - 1)
+        const genericBonus = type === 'castle' ? 0 : Math.ceil(catalog.integrity * 0.1) * (level - 1)
 
         return catalog.integrity + explicitBonus * (level - 1) + genericBonus
     }
@@ -2645,7 +2666,7 @@ export default function createGame(options = {}) {
     function getMaxBarrier(type, level) {
         const catalog = STRUCTURES[type]
         const explicitBonus = catalog.barrierPerLevel || 0
-        const genericBonus = type === 'base' ? 0 : Math.ceil(catalog.barrier * 0.1) * (level - 1)
+        const genericBonus = type === 'castle' ? 0 : Math.ceil(catalog.barrier * 0.1) * (level - 1)
 
         return catalog.barrier + explicitBonus * (level - 1) + genericBonus
     }
@@ -2654,12 +2675,12 @@ export default function createGame(options = {}) {
         return Math.round(STRUCTURES[structure.type].cost * (1.5 ** structure.level))
     }
 
-    function getCoalRate(structure) {
-        return STRUCTURES.cover.coalRate + (structure.level - 1) * STRUCTURES.cover.coalRatePerLevel
+    function getGoldRate(structure) {
+        return STRUCTURES.mine.goldRate + (structure.level - 1) * STRUCTURES.mine.goldRatePerLevel
     }
 
-    function getKnowledgeRate(structure) {
-        return STRUCTURES.taraque.knowledgeRate + (structure.level - 1) * STRUCTURES.taraque.knowledgeRatePerLevel
+    function getWisdomRate(structure) {
+        return STRUCTURES.library.wisdomRate + (structure.level - 1) * STRUCTURES.library.wisdomRatePerLevel
     }
 
     function addLog(room, message) {
@@ -2677,7 +2698,7 @@ export default function createGame(options = {}) {
 
     function getPlayerName(room, playerId) {
         if (!playerId || !room.players[playerId]) {
-            return 'Neutro'
+            return 'Neutral'
         }
 
         return room.players[playerId].gamerTag
@@ -2761,7 +2782,7 @@ export default function createGame(options = {}) {
             countActiveOwnedStructures,
             computePlayerLimits,
             computeAverageStructureLevel,
-            computeBaseUpgradeGate,
+            computeCastleUpgradeGate,
             getEmptyTileNear,
             getEmptyNeighbor,
             summarizeActor,
@@ -2788,13 +2809,13 @@ function summarizePlayer(player) {
         gamerTag: player.gamerTag,
         x: player.x,
         y: player.y,
-        coal: player.coal,
-        knowledge: player.knowledge,
+        gold: player.gold,
+        wisdom: player.wisdom,
         alive: player.alive,
         connected: player.connected,
         isAi: player.isAi,
         autoplay: player.autoplay,
-        baseId: player.baseId,
+        castleId: player.castleId,
         integrity: player.integrity,
         maxIntegrity: player.maxIntegrity,
         barrier: player.barrier,

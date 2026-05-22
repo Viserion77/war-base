@@ -1,6 +1,6 @@
 # Estrategia De Inteligencia Artificial
 
-Este documento descreve a estrategia de inteligencia artificial atual do War Base: um agente composto, treinavel de forma supervisionada, que joga com o mesmo estado filtrado por fog of war recebido por jogadores humanos.
+Este documento descreve a estrategia de inteligencia artificial atual do War Castelo: um agente composto, treinavel de forma supervisionada, que joga com o mesmo estado filtrado por fog of war recebido por jogadores humanos.
 
 ## Visao Geral
 
@@ -10,7 +10,7 @@ O fluxo principal e:
 
 1. O servidor adiciona um jogador interno controlado por IA.
 2. O agente composto monta o input com 3 frames do tabuleiro espectral e 32 escalares.
-3. A rede `router` escolhe a macro-acao: `farm`, `capture`, `research`, `defend`, `attack`, `upgrade`, `upgrade-base`, `scout` ou `wait`.
+3. A rede `router` escolhe a macro-acao: `farm`, `capture`, `research`, `defend`, `attack`, `upgrade`, `upgrade-castle`, `scout` ou `wait`.
 4. A sub-rede da macro-acao decide o detalhe: alvo, tile de construcao, pesquisa ou spawn.
 5. Os validadores deterministicos conferem recursos, requisitos, alcance e ocupacao do mapa.
 6. A primeira decisao valida vira um comando do jogo.
@@ -19,7 +19,7 @@ Quando os arquivos treinados em `ai/agente-composto/redes/` ainda nao existem, o
 
 ## Fog Of War
 
-A IA nao enxerga o estado completo da sala. O motor calcula uma `fogMask` por jogador com base no `sightRange` de bases, estruturas e unidades. Estruturas inimigas ou neutras vistas antes ficam em `memory.structures` como ultimo avistamento, mas unidades e jogadores nao sao memorizados.
+A IA nao enxerga o estado completo da sala. O motor calcula uma `fogMask` por jogador com castelo no `sightRange` de castelos, estruturas e unidades. Estruturas inimigas ou neutras vistas antes ficam em `memory.structures` como ultimo avistamento, mas unidades e jogadores nao sao memorizados.
 
 Isso faz a IA decidir com a mesma informacao espacial que um humano teria: alvos fora da visao so entram no plano se foram lembrados como estruturas.
 
@@ -28,7 +28,7 @@ Isso faz a IA decidir com a mesma informacao espacial que um humano teria: alvos
 Cada decisao usa:
 
 - 3 frames do tabuleiro 48x30, codificados como valores espectrais em um vetor achatado;
-- 32 escalares de economia, tecnologia, composicao, alvos visiveis, memoria, inimigos vivos, fracao visivel do mapa, tick da partida, ocupacao dos slots de construcao e gate percentual de upgrade da Base.
+- 32 escalares de economia, tecnologia, composicao, alvos visiveis, memoria, inimigos vivos, fracao visivel do mapa, tick da partida, ocupacao dos slots de construcao e gate percentual de upgrade da Castelo.
 
 O tamanho final do input padrao e `4352` floats. A rede compartilhada de placement recebe mais 6 valores one-hot para o tipo de estrutura, totalizando `4358` floats.
 
@@ -42,8 +42,8 @@ Arquitetura principal:
 - `research`: escolhe Per, Hef ou Tujai.
 - `defend`: decide torre defensiva ou upgrade defensivo.
 - `attack`: decide Tujai, Zunim ou torre avancada.
-- `upgrade`: escolhe estrutura propria nao-base para evoluir quando houver teto liberado.
-- `upgrade-base`: prioriza a Base quando slots de construcao estao cheios.
+- `upgrade`: escolhe estrutura propria nao-castelo para evoluir quando houver teto liberado.
+- `upgrade-castle`: prioriza a Castelo quando slots de construcao estao cheios.
 - `scout`: escolhe tile para mover o Capturador.
 - `placement`: heatmap compartilhado para tiles de construcao.
 - `target-*`: heatmaps especializados para alvos.
@@ -56,9 +56,9 @@ A camada em `ai/agente-composto/validadores.js` continua essencial. Ela impede c
 
 - construcoes precisam de carvao, requisitos liberados, tile livre, alcance de construcao e slot disponivel em `catalog.limits`;
 - pesquisas precisam de conhecimento e nivel minimo de Taraque;
-- upgrades so podem mirar estruturas proprias ativas com carvao suficiente; estruturas nao-base tambem precisam estar abaixo do nivel da Base; o upgrade da Base depende da media de niveis das outras estruturas alcancar `nivelAtual * 0.75`;
+- upgrades so podem mirar estruturas proprias ativas com carvao suficiente; estruturas nao-castelo tambem precisam estar abaixo do nivel da Castelo; o upgrade da Castelo depende da media de niveis das outras estruturas alcancar `nivelAtual * 0.75`;
 - capturas so miram estruturas capturaveis visiveis ou lembradas;
-- scout usa `move-capturer-to` para explorar tiles sob fog.
+- scout usa `move-herald-to` para explorar tiles sob fog.
 
 ## Treinamento
 

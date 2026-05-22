@@ -1,9 +1,9 @@
 /* istanbul ignore file -- dataset bootstrap for supervised training. */
-import { exemploClassificacao } from './dataset-utils.js'
+import { classificationExample } from './dataset-utils.js'
 import { DEFEND_ACTIONS } from '../constants.js'
 
 export const datasetDefend = [
-    exemploClassificacao(DEFEND_ACTIONS, 'build-per', { perUnlocked: 1, visibleEnemyStructures: 0.2, perSlotRatio: 0.2 }),
-    exemploClassificacao(DEFEND_ACTIONS, 'build-hef', { hefUnlocked: 1, visibleEnemyUnits: 0.8, hefSlotRatio: 0.2 }),
-    exemploClassificacao(DEFEND_ACTIONS, 'upgrade-defensive', { coal: 1, perCount: 0.5, perSlotRatio: 1, hefSlotRatio: 1 }),
+    classificationExample(DEFEND_ACTIONS, 'build-archer', { archerUnlocked: 1, visibleEnemyStructures: 0.2, archerSlotRatio: 0.2 }),
+    classificationExample(DEFEND_ACTIONS, 'build-catapult', { catapultUnlocked: 1, visibleEnemyUnits: 0.8, catapultSlotRatio: 0.2 }),
+    classificationExample(DEFEND_ACTIONS, 'upgrade-defensive', { gold: 1, archerCount: 0.5, archerSlotRatio: 1, catapultSlotRatio: 1 }),
 ]

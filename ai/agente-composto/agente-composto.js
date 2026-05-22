@@ -1,7 +1,7 @@
 /* istanbul ignore file -- model orchestration is smoke-tested; generated policy coverage is not line-gated. */
 import fs from 'fs'
 import { fileURLToPath } from 'url'
-import RedeNeural from '../rede-neural/rede-neural.js'
+import NeuralNetwork from '../rede-neural/rede-neural.js'
 import { encodeBoard } from './codificacao/board.js'
 import { encodeScalars } from './codificacao/escalares.js'
 import { createFrameBuffer, flattenFrames } from './codificacao/historico.js'
@@ -18,35 +18,29 @@ import {
 } from './constants.js'
 import {
     countCappedTypes,
-    criarComandoCaptura,
-    criarComandoConstrucao,
-    criarComandoParaAcao,
-    criarComandoPesquisa,
-    criarComandoScout,
-    criarComandoUpgrade,
-    criarComandoZunim,
+    createCaptureCommand,
+    createBuildCommand,
+    createCommandForAction,
+    createResearchCommand,
+    createScoutCommand,
+    createUpgradeCommand,
+    createSoldierCommand,
     rankByScores,
 } from './validadores.js'
 
 export const DEFAULT_NETWORKS_DIR = fileURLToPath(new URL('./redes/', import.meta.url))
 
-export function createCompositeWarBaseAgent(opcoes = {}) {
-    const redes = opcoes.redes || opcoes.networks || carregarRedesCompostas(opcoes.networksDir || DEFAULT_NETWORKS_DIR)
-    const frameBuffer = opcoes.frameBuffer || createFrameBuffer()
-    const heuristicFallback = opcoes.heuristicFallback ?? true
+export function createCompositeWarBaseAgent(options = {}) {
+    const networks = options.networks || loadCompositeNetworks(options.networksDir || DEFAULT_NETWORKS_DIR)
+    const frameBuffer = options.frameBuffer || createFrameBuffer()
+    const heuristicFallback = options.heuristicFallback ?? true
 
     return {
-        cooldownMs: opcoes.cooldownMs ?? 1000,
-        redes,
+        cooldownMs: options.cooldownMs ?? 1000,
+        networks,
         frameBuffer,
-        decidir(contexto) {
-            return decidirComRedes(redes, contexto.state, contexto.playerId, {
-                frameBuffer,
-                heuristicFallback,
-            })
-        },
-        decide(contexto) {
-            return decidirComRedes(redes, contexto.state, contexto.playerId, {
+        decide(context) {
+            return decideWithNetworks(networks, context.state, context.playerId, {
                 frameBuffer,
                 heuristicFallback,
             })
@@ -54,17 +48,17 @@ export function createCompositeWarBaseAgent(opcoes = {}) {
     }
 }
 
-export function carregarRedesCompostas(networksDir = DEFAULT_NETWORKS_DIR) {
-    const redes = {}
+export function loadCompositeNetworks(networksDir = DEFAULT_NETWORKS_DIR) {
+    const networks = {}
 
     for (const name of NETWORK_NAMES) {
-        redes[name] = carregarRedeComposta(name, networksDir)
+        networks[name] = loadCompositeNetwork(name, networksDir)
     }
 
-    return redes
+    return networks
 }
 
-export function carregarRedeComposta(name, networksDir = DEFAULT_NETWORKS_DIR) {
+export function loadCompositeNetwork(name, networksDir = DEFAULT_NETWORKS_DIR) {
     const spec = NETWORK_SPECS[name]
     const path = networksDir.endsWith('/') ? networksDir + name + '.json' : networksDir + '/' + name + '.json'
 
@@ -73,48 +67,48 @@ export function carregarRedeComposta(name, networksDir = DEFAULT_NETWORKS_DIR) {
     }
 
     const model = JSON.parse(fs.readFileSync(path, 'utf8'))
-    const serialized = model.rede || model
+    const serialized = model.network || model
 
-    if (serialized.neuroniosEntrada !== spec.inputs
-        || serialized.neuroniosOcultos !== spec.hidden
-        || serialized.neuroniosSaida !== spec.outputs) {
+    if (serialized.inputNeurons !== spec.inputs
+        || serialized.hiddenNeurons !== spec.hidden
+        || serialized.outputNeurons !== spec.outputs) {
         return createZeroNetwork(spec.outputs)
     }
 
-    return RedeNeural.fromJSON(serialized)
+    return NeuralNetwork.fromJSON(serialized)
 }
 
 export function createZeroNetwork(outputs) {
     return {
-        prever() {
+        predict() {
             return new Array(outputs).fill(0)
         },
     }
 }
 
-export function decidirComRedes(redes, state, playerId, opcoes = {}) {
-    const frameBuffer = opcoes.frameBuffer || createFrameBuffer()
-    const input = criarEntradaComposta(state, playerId, frameBuffer)
-    const macroScores = preverRede(redes.router, input)
+export function decideWithNetworks(networks, state, playerId, options = {}) {
+    const frameBuffer = options.frameBuffer || createFrameBuffer()
+    const input = createCompositeInput(state, playerId, frameBuffer)
+    const macroScores = predictNetwork(networks.router, input)
     const bestMacroScore = Math.max(...macroScores, 0)
 
     if (bestMacroScore <= 0) {
-        return opcoes.heuristicFallback ? decidirHeuristicamente(state, playerId) : null
+        return options.heuristicFallback ? decideHeuristically(state, playerId) : null
     }
 
-    for (const escolha of rankByScores(MACRO_ACTIONS, macroScores)) {
-        if (escolha.label === 'wait') {
+    for (const choice of rankByScores(MACRO_ACTIONS, macroScores)) {
+        if (choice.label === 'wait') {
             continue
         }
 
-        const comando = montarComandoDaMacro(escolha.label, redes, input, state, playerId)
+        const command = buildCommandFromMacro(choice.label, networks, input, state, playerId)
 
-        if (comando) {
+        if (command) {
             return {
-                ...comando,
+                ...command,
                 aiDecision: {
-                    policy: escolha.label,
-                    score: Number(escolha.score.toFixed(6)),
+                    policy: choice.label,
+                    score: Number(choice.score.toFixed(6)),
                 },
             }
         }
@@ -123,7 +117,7 @@ export function decidirComRedes(redes, state, playerId, opcoes = {}) {
     return null
 }
 
-export function criarEntradaComposta(state, playerId, frameBuffer = createFrameBuffer()) {
+export function createCompositeInput(state, playerId, frameBuffer = createFrameBuffer()) {
     const board = encodeBoard(state, playerId)
     const frames = frameBuffer.push(playerId, board)
     const scalars = encodeScalars(state, playerId)
@@ -136,174 +130,174 @@ export function criarEntradaComposta(state, playerId, frameBuffer = createFrameB
     return input
 }
 
-export function montarComandoDaMacro(macro, redes, input, state, playerId) {
+export function buildCommandFromMacro(macro, networks, input, state, playerId) {
     if (macro === 'farm') {
-        return montarComandoFarm(redes, input, state, playerId)
+        return buildFarmCommand(networks, input, state, playerId)
     }
 
     if (macro === 'capture') {
-        return criarComandoCaptura(state, playerId, preverRede(redes.capture, input))
+        return createCaptureCommand(state, playerId, predictNetwork(networks.capture, input))
     }
 
     if (macro === 'research') {
-        return montarComandoResearch(redes, input, state, playerId)
+        return buildResearchCommand(networks, input, state, playerId)
     }
 
     if (macro === 'defend') {
-        return montarComandoDefend(redes, input, state, playerId)
+        return buildDefendCommand(networks, input, state, playerId)
     }
 
     if (macro === 'attack') {
-        return montarComandoAttack(redes, input, state, playerId)
+        return buildAttackCommand(networks, input, state, playerId)
     }
 
     if (macro === 'upgrade') {
-        return criarComandoUpgrade(state, playerId, preverRede(redes.upgrade, input))
+        return createUpgradeCommand(state, playerId, predictNetwork(networks.upgrade, input))
     }
 
-    if (macro === 'upgrade-base') {
-        return criarComandoUpgrade(state, playerId, preverRede(redes['target-upgrade'], input), ['base'])
+    if (macro === 'upgrade-castle') {
+        return createUpgradeCommand(state, playerId, predictNetwork(networks['target-upgrade'], input), ['castle'])
     }
 
     if (macro === 'scout') {
-        return criarComandoScout(state, playerId, preverRede(redes.scout, input))
+        return createScoutCommand(state, playerId, predictNetwork(networks.scout, input))
     }
 
     return null
 }
 
-export function montarComandoFarm(redes, input, state, playerId) {
-    const scores = preverRede(redes.farm, input)
+export function buildFarmCommand(networks, input, state, playerId) {
+    const scores = predictNetwork(networks.farm, input)
 
-    for (const escolha of rankByScores(FARM_ACTIONS, scores)) {
-        if (escolha.label === 'build-cover') {
-            const comando = criarComandoConstrucao(state, playerId, 'cover', preverPlacement(redes, input, 'cover'))
-            if (comando) return comando
+    for (const choice of rankByScores(FARM_ACTIONS, scores)) {
+        if (choice.label === 'build-mine') {
+            const command = createBuildCommand(state, playerId, 'mine', predictPlacement(networks, input, 'mine'))
+            if (command) return command
         }
 
-        if (escolha.label === 'build-taraque') {
-            const comando = criarComandoConstrucao(state, playerId, 'taraque', preverPlacement(redes, input, 'taraque'))
-            if (comando) return comando
+        if (choice.label === 'build-library') {
+            const command = createBuildCommand(state, playerId, 'library', predictPlacement(networks, input, 'library'))
+            if (command) return command
         }
 
-        if (escolha.label === 'capture-cover-target') {
-            const comando = criarComandoCaptura(state, playerId, preverRede(redes['target-capture'], input), { type: 'cover' })
-            if (comando) return comando
-        }
-    }
-
-    return null
-}
-
-export function montarComandoResearch(redes, input, state, playerId) {
-    const scores = preverRede(redes.research, input)
-
-    for (const escolha of rankByScores(RESEARCH_ACTIONS, scores)) {
-        const comando = criarComandoPesquisa(state, playerId, escolha.label)
-        if (comando) return comando
-    }
-
-    return null
-}
-
-export function montarComandoDefend(redes, input, state, playerId) {
-    const scores = preverRede(redes.defend, input)
-
-    for (const escolha of rankByScores(DEFEND_ACTIONS, scores)) {
-        if (escolha.label === 'build-per') {
-            const comando = criarComandoConstrucao(state, playerId, 'per', preverPlacement(redes, input, 'per'))
-            if (comando) return comando
-        }
-
-        if (escolha.label === 'build-hef') {
-            const comando = criarComandoConstrucao(state, playerId, 'hef', preverPlacement(redes, input, 'hef'))
-            if (comando) return comando
-        }
-
-        if (escolha.label === 'upgrade-defensive') {
-            const comando = criarComandoUpgrade(state, playerId, preverRede(redes['target-defend-upgrade'], input), ['per', 'hef'])
-            if (comando) return comando
+        if (choice.label === 'capture-mine-target') {
+            const command = createCaptureCommand(state, playerId, predictNetwork(networks['target-capture'], input), { type: 'mine' })
+            if (command) return command
         }
     }
 
     return null
 }
 
-export function montarComandoAttack(redes, input, state, playerId) {
-    const scores = preverRede(redes.attack, input)
+export function buildResearchCommand(networks, input, state, playerId) {
+    const scores = predictNetwork(networks.research, input)
 
-    for (const escolha of rankByScores(ATTACK_ACTIONS, scores)) {
-        if (escolha.label === 'build-tujai') {
-            const comando = criarComandoConstrucao(state, playerId, 'tujai', preverPlacement(redes, input, 'tujai'))
-            if (comando) return comando
+    for (const choice of rankByScores(RESEARCH_ACTIONS, scores)) {
+        const command = createResearchCommand(state, playerId, choice.label)
+        if (command) return command
+    }
+
+    return null
+}
+
+export function buildDefendCommand(networks, input, state, playerId) {
+    const scores = predictNetwork(networks.defend, input)
+
+    for (const choice of rankByScores(DEFEND_ACTIONS, scores)) {
+        if (choice.label === 'build-archer') {
+            const command = createBuildCommand(state, playerId, 'archer', predictPlacement(networks, input, 'archer'))
+            if (command) return command
         }
 
-        if (escolha.label === 'spawn-zunim') {
-            const comando = criarComandoZunim(state, playerId)
-            if (comando) return comando
+        if (choice.label === 'build-catapult') {
+            const command = createBuildCommand(state, playerId, 'catapult', predictPlacement(networks, input, 'catapult'))
+            if (command) return command
         }
 
-        if (escolha.label === 'build-forward-tower') {
-            const per = criarComandoConstrucao(state, playerId, 'per', preverPlacement(redes, input, 'per'))
-            if (per) return per
-
-            const hef = criarComandoConstrucao(state, playerId, 'hef', preverPlacement(redes, input, 'hef'))
-            if (hef) return hef
+        if (choice.label === 'upgrade-defensive') {
+            const command = createUpgradeCommand(state, playerId, predictNetwork(networks['target-defend-upgrade'], input), ['archer', 'catapult'])
+            if (command) return command
         }
     }
 
     return null
 }
 
-export function preverPlacement(redes, input, structureType) {
-    return preverRede(redes.placement, input.concat(oneHotStructureType(structureType)))
+export function buildAttackCommand(networks, input, state, playerId) {
+    const scores = predictNetwork(networks.attack, input)
+
+    for (const choice of rankByScores(ATTACK_ACTIONS, scores)) {
+        if (choice.label === 'build-barracks') {
+            const command = createBuildCommand(state, playerId, 'barracks', predictPlacement(networks, input, 'barracks'))
+            if (command) return command
+        }
+
+        if (choice.label === 'spawn-soldier') {
+            const command = createSoldierCommand(state, playerId)
+            if (command) return command
+        }
+
+        if (choice.label === 'build-forward-tower') {
+            const archer = createBuildCommand(state, playerId, 'archer', predictPlacement(networks, input, 'archer'))
+            if (archer) return archer
+
+            const catapult = createBuildCommand(state, playerId, 'catapult', predictPlacement(networks, input, 'catapult'))
+            if (catapult) return catapult
+        }
+    }
+
+    return null
+}
+
+export function predictPlacement(networks, input, structureType) {
+    return predictNetwork(networks.placement, input.concat(oneHotStructureType(structureType)))
 }
 
 export function oneHotStructureType(structureType) {
     return PLACEMENT_STRUCTURE_TYPES.map(type => type === structureType ? 1 : 0)
 }
 
-export function preverRede(rede, input) {
-    if (!rede || typeof rede.prever !== 'function') {
+export function predictNetwork(network, input) {
+    if (!network || typeof network.predict !== 'function') {
         return []
     }
 
-    return rede.prever(input)
+    return network.predict(input)
 }
 
-export function decidirHeuristicamente(state, playerId) {
+export function decideHeuristically(state, playerId) {
     const standardActions = [
         'capture',
-        'build-cover',
-        'upgrade-base',
-        'build-taraque',
-        'research-per',
-        'research-hef',
-        'research-tujai',
-        'build-per',
-        'build-hef',
-        'build-tujai',
-        'spawn-zunim',
+        'build-mine',
+        'upgrade-castle',
+        'build-library',
+        'research-archer',
+        'research-catapult',
+        'research-barracks',
+        'build-archer',
+        'build-catapult',
+        'build-barracks',
+        'spawn-soldier',
         'scout',
     ]
-    const gate = state.catalog?.limits?.baseUpgrade
+    const gate = state.catalog?.limits?.castleUpgrade
     const gateClosed = gate ? !gate.ready : false
-    const capsCheios = countCappedTypes(state) >= 2
+    const fullCaps = countCappedTypes(state) >= 2
 
     let actions = standardActions
 
     if (gateClosed) {
-        actions = ['upgrade', ...standardActions.filter(action => action !== 'upgrade-base')]
-    } else if (capsCheios) {
-        actions = ['upgrade-base', ...standardActions.filter(action => action !== 'upgrade-base')]
+        actions = ['upgrade', ...standardActions.filter(action => action !== 'upgrade-castle')]
+    } else if (fullCaps) {
+        actions = ['upgrade-castle', ...standardActions.filter(action => action !== 'upgrade-castle')]
     }
 
     for (const action of actions) {
-        const comando = criarComandoParaAcao(action, state, playerId)
+        const command = createCommandForAction(action, state, playerId)
 
-        if (comando) {
+        if (command) {
             return {
-                ...comando,
+                ...command,
                 aiDecision: {
                     policy: 'heuristic:' + action,
                     score: 0,

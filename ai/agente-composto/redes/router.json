@@ -1,18 +1,18 @@
 {
   "name": "war-base-composite-router",
-  "trainedAt": "2026-05-21T21:29:09.129Z",
+  "trainedAt": "2026-05-22T13:25:52.549Z",
   "examples": 12,
-  "epocas": 300,
-  "rede": {
-    "tipo": "war-base-rede-neural",
-    "neuroniosEntrada": 4352,
-    "neuroniosOcultos": 96,
-    "neuroniosSaida": 9,
-    "taxaAprendizado": 0.15,
-    "pesosEntradaOculta": {
-      "linhas": 96,
-      "colunas": 4352,
-      "conteudo": [
+  "epochs": 300,
+  "network": {
+    "type": "war-base-neural-network",
+    "inputNeurons": 4352,
+    "hiddenNeurons": 96,
+    "outputNeurons": 9,
+    "learningRate": 0.15,
+    "inputHiddenWeights": {
+      "rows": 96,
+      "columns": 4352,
+      "content": [
         [
           0.5813144077546895,
           0.8367038201540709,
@@ -417999,10 +417999,10 @@
         ]
       ]
     },
-    "pesosOcultaSaida": {
-      "linhas": 9,
-      "colunas": 96,
-      "conteudo": [
+    "hiddenOutputWeights": {
+      "rows": 9,
+      "columns": 96,
+      "content": [
         [
           0.13916818216107174,
           0.9680690791069604,
@@ -418887,10 +418887,10 @@
         ]
       ]
     },
-    "biasEntradaOculta": {
-      "linhas": 96,
-      "colunas": 1,
-      "conteudo": [
+    "inputHiddenBias": {
+      "rows": 96,
+      "columns": 1,
+      "content": [
         [
           -1.1298208672726753
         ],
@@ -419181,10 +419181,10 @@
         ]
       ]
     },
-    "biasOcultaSaida": {
-      "linhas": 9,
-      "colunas": 1,
-      "conteudo": [
+    "hiddenOutputBias": {
+      "rows": 9,
+      "columns": 1,
+      "content": [
         [
           -0.15026956758590523
         ],
