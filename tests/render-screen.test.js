@@ -211,22 +211,30 @@ describe('render-screen', () => {
         expect(minimalCanvas.width).toBe(50)
     })
 
-    test('draws structures from the game spritesheet when it is loaded', () => {
+    test('draws terrain and structures from image assets when loaded', () => {
         const context = createContext()
         const canvas = createCanvas(context)
         const game = createGameState()
+        const terrainImage = { complete: true, naturalWidth: 1536 }
         const spriteSheet = { complete: true, naturalWidth: 384 }
 
-        __renderTestables.setRenderAssetsForTests({ structureSpriteSheet: spriteSheet })
+        __renderTestables.setRenderAssetsForTests({ terrainImage, structureSpriteSheet: spriteSheet })
         renderScreen(canvas, { innerHTML: '', __lastHtml: null }, game, jest.fn(), 'p1', {
             selectedTile: { x: 1, y: 1 },
             selectedStructureId: 'castle-1',
         })
         __renderTestables.setRenderAssetsForTests()
 
-        expect(context.__calls.some(call => call[0] === 'drawImage')).toBe(true)
+        expect(context.__calls.filter(call => call[0] === 'drawImage').length).toBeGreaterThan(1)
+        expect(__renderTestables.isImageReady(terrainImage)).toBe(true)
         expect(__renderTestables.isImageReady(spriteSheet)).toBe(true)
+        expect(__renderTestables.drawTerrainImage(context, 100, 50)).toBe(false)
         expect(__renderTestables.drawStructureSprite(context, 'missing', 0, 0, 10, '#000')).toBe(false)
+
+        const roadMap = __renderTestables.buildRoadMap(game.state)
+        expect(roadMap.has(__renderTestables.tileKey(1, 1))).toBe(true)
+        expect(roadMap.has(__renderTestables.tileKey(6, 1))).toBe(true)
+        expect(__renderTestables.getRoadMask(roadMap, 2, 1)).toBe(10)
     })
 
     test('finds structures by tile, including remembered structures', () => {

@@ -10,6 +10,7 @@ const STRUCTURE_SPRITE_FRAMES = {
     barracks: 5,
 }
 const renderAssets = {
+    terrainImage: createImageAsset('/img/terrain.png'),
     structureSpriteSheet: createImageAsset('/img/icons_game.png'),
 }
 
@@ -94,17 +95,213 @@ function drawTerrain(context, game) {
     const canvasWidth = width * pixelsPerFields
     const canvasHeight = height * pixelsPerFields
 
-    context.fillStyle = '#f4efe4'
-    context.fillRect(0, 0, canvasWidth, canvasHeight)
+    if (!drawTerrainImage(context, canvasWidth, canvasHeight)) {
+        context.fillStyle = '#8da464'
+        context.fillRect(0, 0, canvasWidth, canvasHeight)
+    }
 
-    context.fillStyle = '#e8dcc4'
-    for (let y = 0; y < height; y += 2) {
-        for (let x = (y % 4 === 0 ? 0 : 1); x < width; x += 4) {
-            context.fillRect(x * pixelsPerFields, y * pixelsPerFields, pixelsPerFields, pixelsPerFields)
+    const roadMap = buildRoadMap(game.state)
+    drawTerrainTiles(context, game.state, roadMap)
+    drawTerrainGrid(context, width, height, pixelsPerFields, canvasWidth, canvasHeight)
+}
+
+function drawTerrainImage(context, canvasWidth, canvasHeight) {
+    const terrainImage = renderAssets.terrainImage
+
+    if (!isImageReady(terrainImage) || typeof context.drawImage !== 'function') {
+        return false
+    }
+
+    context.drawImage(terrainImage, 0, 0, canvasWidth, canvasHeight)
+    return true
+}
+
+function drawTerrainTiles(context, state, roadMap) {
+    const { width, height, pixelsPerFields } = state.screen
+
+    for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+            if (roadMap.has(tileKey(x, y))) {
+                drawRoadTile(context, x, y, pixelsPerFields, getRoadMask(roadMap, x, y))
+            } else {
+                drawGrassTile(context, x, y, pixelsPerFields)
+            }
+        }
+    }
+}
+
+function drawGrassTile(context, tileX, tileY, size) {
+    const x = tileX * size
+    const y = tileY * size
+    const patches = tileHash(tileX, tileY, 3) > 0.58 ? 2 : 1
+
+    context.save()
+    context.fillStyle = 'rgba(77, 113, 54, 0.22)'
+    for (let index = 0; index < patches; index += 1) {
+        const px = x + size * (0.18 + tileHash(tileX, tileY, index + 7) * 0.64)
+        const py = y + size * (0.18 + tileHash(tileX, tileY, index + 17) * 0.64)
+        context.beginPath()
+        context.moveTo(px, py)
+        context.lineTo(px + size * 0.10, py - size * 0.08)
+        context.lineTo(px + size * 0.18, py)
+        context.strokeStyle = 'rgba(77, 113, 54, 0.24)'
+        context.lineWidth = Math.max(1, size * 0.035)
+        context.stroke()
+    }
+    context.restore()
+}
+
+function drawRoadTile(context, tileX, tileY, size, mask) {
+    const x = tileX * size
+    const y = tileY * size
+    const roadWidth = size * 0.62
+    const edge = (size - roadWidth) / 2
+    const centerStart = edge
+    const centerEnd = size - edge
+
+    context.save()
+    context.fillStyle = '#bd8650'
+
+    if (mask === 0) {
+        roundedFillRect(context, x + edge, y + edge, roadWidth, roadWidth, size * 0.16)
+    } else {
+        roundedFillRect(context, x + centerStart, y + centerStart, roadWidth, roadWidth, size * 0.12)
+        if (mask & 1) context.fillRect(x + edge, y, roadWidth, centerEnd)
+        if (mask & 2) context.fillRect(x + centerStart, y + edge, centerEnd, roadWidth)
+        if (mask & 4) context.fillRect(x + edge, y + centerStart, roadWidth, centerEnd)
+        if (mask & 8) context.fillRect(x, y + edge, centerEnd, roadWidth)
+    }
+
+    context.fillStyle = 'rgba(244, 220, 174, 0.34)'
+    for (let index = 0; index < 4; index += 1) {
+        const px = x + size * (0.12 + tileHash(tileX, tileY, index + 31) * 0.76)
+        const py = y + size * (0.12 + tileHash(tileX, tileY, index + 41) * 0.76)
+        context.beginPath()
+        context.ellipse(px, py, size * 0.035, size * 0.022, tileHash(tileX, tileY, index + 51) * Math.PI, 0, Math.PI * 2)
+        context.fill()
+    }
+
+    context.strokeStyle = 'rgba(96, 72, 42, 0.22)'
+    context.lineWidth = Math.max(1, size * 0.04)
+    context.strokeRect(x + edge * 0.45, y + edge * 0.45, size - edge * 0.9, size - edge * 0.9)
+    context.restore()
+}
+
+function roundedFillRect(context, x, y, width, height, radius) {
+    context.beginPath()
+    context.moveTo(x + radius, y)
+    context.lineTo(x + width - radius, y)
+    context.quadraticCurveTo(x + width, y, x + width, y + radius)
+    context.lineTo(x + width, y + height - radius)
+    context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+    context.lineTo(x + radius, y + height)
+    context.quadraticCurveTo(x, y + height, x, y + height - radius)
+    context.lineTo(x, y + radius)
+    context.quadraticCurveTo(x, y, x + radius, y)
+    context.fill()
+}
+
+function buildRoadMap(state) {
+    const roads = new Set()
+    const ownedStructures = Object.values(state.structures || {})
+        .filter(structure => structure.ownerId)
+        .sort((first, second) => getStructureWeight(first.type) - getStructureWeight(second.type)
+            || first.y - second.y
+            || first.x - second.x)
+    const byOwner = new Map()
+
+    for (const structure of ownedStructures) {
+        if (!byOwner.has(structure.ownerId)) {
+            byOwner.set(structure.ownerId, [])
+        }
+        byOwner.get(structure.ownerId).push(structure)
+    }
+
+    for (const structures of byOwner.values()) {
+        const castle = structures.find(structure => structure.type === 'castle')
+        if (!castle) {
+            continue
+        }
+
+        const connected = [castle]
+        roads.add(tileKey(castle.x, castle.y))
+
+        const targets = structures
+            .filter(structure => structure.structureId !== castle.structureId)
+            .sort((first, second) => distance(castle, first) - distance(castle, second))
+
+        for (const target of targets) {
+            const anchor = getNearestRoadAnchor(connected, target)
+            addRoadPath(roads, anchor, target)
+            connected.push(target)
         }
     }
 
-    context.strokeStyle = 'rgba(60, 52, 42, 0.12)'
+    return roads
+}
+
+function getNearestRoadAnchor(anchors, target) {
+    return anchors.reduce((nearest, candidate) => {
+        return distance(candidate, target) < distance(nearest, target) ? candidate : nearest
+    }, anchors[0])
+}
+
+function addRoadPath(roads, from, to) {
+    let x = from.x
+    let y = from.y
+    const horizontalFirst = Math.abs(to.x - from.x) >= Math.abs(to.y - from.y)
+
+    roads.add(tileKey(x, y))
+
+    if (horizontalFirst) {
+        x = addRoadAxis(roads, x, y, to.x, 'x')
+        y = addRoadAxis(roads, x, y, to.y, 'y')
+    } else {
+        y = addRoadAxis(roads, x, y, to.y, 'y')
+        x = addRoadAxis(roads, x, y, to.x, 'x')
+    }
+}
+
+function addRoadAxis(roads, x, y, target, axis) {
+    const current = axis === 'x' ? x : y
+    const step = Math.sign(target - current)
+
+    if (step === 0) {
+        return current
+    }
+
+    let value = current
+    while (value !== target) {
+        value += step
+        const nextX = axis === 'x' ? value : x
+        const nextY = axis === 'y' ? value : y
+        roads.add(tileKey(nextX, nextY))
+    }
+
+    return value
+}
+
+function getRoadMask(roads, x, y) {
+    let mask = 0
+    if (roads.has(tileKey(x, y - 1))) mask |= 1
+    if (roads.has(tileKey(x + 1, y))) mask |= 2
+    if (roads.has(tileKey(x, y + 1))) mask |= 4
+    if (roads.has(tileKey(x - 1, y))) mask |= 8
+    return mask
+}
+
+function tileKey(x, y) {
+    return x + ',' + y
+}
+
+function tileHash(x, y, salt = 0) {
+    let value = ((x + 101) * 374761393 + (y + 97) * 668265263 + salt * 1442695041) >>> 0
+    value = ((value ^ (value >>> 13)) * 1274126177) >>> 0
+    return (value >>> 0) / 4294967295
+}
+
+function drawTerrainGrid(context, width, height, pixelsPerFields, canvasWidth, canvasHeight) {
+    context.strokeStyle = 'rgba(60, 52, 42, 0.16)'
     context.lineWidth = 1
 
     for (let x = 0; x <= width; x += 1) {
@@ -316,6 +513,7 @@ function isImageReady(image) {
 }
 
 function setRenderAssetsForTests(assets = {}) {
+    renderAssets.terrainImage = assets.terrainImage || null
     renderAssets.structureSpriteSheet = assets.structureSpriteSheet || null
 }
 
@@ -1401,6 +1599,14 @@ export const __renderTestables = {
     castleUpgradeGatePanel,
     getCaptureStatus,
     drawFogOverlay,
+    drawTerrainImage,
+    drawTerrainGrid,
+    drawTerrainTiles,
+    drawGrassTile,
+    drawRoadTile,
+    buildRoadMap,
+    getRoadMask,
+    tileKey,
     drawStructureSprite,
     isImageReady,
     setRenderAssetsForTests,

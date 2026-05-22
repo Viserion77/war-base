@@ -34,7 +34,8 @@
         body {
             margin: 0;
             min-height: 100vh;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
             background: var(--bg-stone);
             color: var(--ink);
             font-family: "Cinzel", Georgia, "Times New Roman", serif;
@@ -83,6 +84,7 @@
             gap: 10px;
         }
 
+        .topbar-button,
         .lang-switch {
             min-height: 30px;
             border: 1px solid var(--line);
@@ -92,6 +94,20 @@
             cursor: pointer;
             font-weight: 800;
             padding: 0 8px;
+        }
+
+        .topbar-button {
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--paper);
+            color: var(--ink);
+            cursor: pointer;
+            font-weight: 800;
+            padding: 0 10px;
+        }
+
+        .topbar-button[aria-pressed="false"] {
+            opacity: 0.72;
         }
 
         .brand h1 {
@@ -715,6 +731,7 @@
             </div>
             <div class="topbar-actions">
                 <div id="connection-status" class="connection-status" role="status" aria-live="polite"></div>
+                <button id="sound-toggle" class="topbar-button" type="button" aria-pressed="true">Som ligado</button>
                 <select id="lang-switch" class="lang-switch" aria-label="Idioma / Language">
                     <option value="pt-BR">PT-BR</option>
                     <option value="en">EN</option>
@@ -784,6 +801,8 @@
         import renderScreen, { getStructureAt, getTileFromCanvasEvent, preloadRenderAssets, setupScreen } from './render-screen.js'
         import { getLang, onLangChange, setLang, t } from './i18n/index.js'
 
+        const SOUND_STORAGE_KEY = 'war-base:sound-enabled'
+
         const game = createGame()
         const socket = io()
         const uiState = {
@@ -794,6 +813,7 @@
         let renderStarted = false
         let submitMode = 'create'
         let audioUnlocked = false
+        let soundEnabled = readSoundPreference()
         let seenLogIds = new Set()
 
         const lobby = document.getElementById('lobby')
@@ -805,6 +825,7 @@
         const roomLabel = document.getElementById('room-label')
         const copyRoomKeyButton = document.getElementById('copy-room-key')
         const connectionStatus = document.getElementById('connection-status')
+        const soundToggle = document.getElementById('sound-toggle')
         const langSwitch = document.getElementById('lang-switch')
         const gamerTagInput = document.getElementById('gamer-tag')
         const hostKeyInput = document.getElementById('host-key')
@@ -816,6 +837,7 @@
 
         hydrateLobbyFields()
         setupAudioUnlock()
+        setupSoundToggle()
         setupLanguageSwitch()
         applyTranslations()
         updateRoomHeader()
@@ -1007,6 +1029,41 @@
             document.addEventListener('keydown', unlock, { once: true })
         }
 
+        function setupSoundToggle() {
+            updateSoundToggle()
+            soundToggle.addEventListener('click', () => {
+                soundEnabled = !soundEnabled
+                localStorage.setItem(SOUND_STORAGE_KEY, soundEnabled ? 'true' : 'false')
+
+                if (soundEnabled) {
+                    audioUnlocked = true
+                    for (const audio of Object.values(audioAssets)) {
+                        audio.load()
+                    }
+                }
+
+                updateSoundToggle()
+            })
+        }
+
+        function updateSoundToggle() {
+            const label = soundEnabled ? t('audio.soundOn') : t('audio.soundOff')
+            const title = soundEnabled ? t('audio.disableSound') : t('audio.enableSound')
+
+            soundToggle.textContent = label
+            soundToggle.title = title
+            soundToggle.setAttribute('aria-label', title)
+            soundToggle.setAttribute('aria-pressed', soundEnabled ? 'true' : 'false')
+        }
+
+        function readSoundPreference() {
+            try {
+                return localStorage.getItem(SOUND_STORAGE_KEY) !== 'false'
+            } catch (error) {
+                return true
+            }
+        }
+
         function createAudioAssets() {
             if (typeof Audio === 'undefined') {
                 return {}
@@ -1083,7 +1140,7 @@
         }
 
         function playSound(name) {
-            if (!audioUnlocked || !audioAssets[name]) {
+            if (!soundEnabled || !audioUnlocked || !audioAssets[name]) {
                 return
             }
 
@@ -1125,6 +1182,7 @@
             if (connectionStatus.dataset.labelKey) {
                 connectionStatus.textContent = t(connectionStatus.dataset.labelKey)
             }
+            updateSoundToggle()
         }
 
         function handleKeyboardShortcut(event) {
