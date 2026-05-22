@@ -1752,6 +1752,7 @@ function getNpcName(type) {
         }
 
         unit.lastAttackAt = now
+        unit.lastAttackTarget = createAttackTargetSnapshot(target)
         applyDamage(room, target, unit.damage, now, unit.ownerId)
         syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
         return true
@@ -1991,6 +1992,7 @@ function getNpcName(type) {
             }
 
             structure.lastAttackAt = now
+            structure.lastAttackTarget = createAttackTargetSnapshot(target)
             if (structure.type === 'catapult') {
                 applySplashDamage(room, structure, target, catalog.damage, now)
             } else {
@@ -2154,6 +2156,7 @@ function getNpcName(type) {
                 }
 
                 unit.lastAttackAt = now
+                unit.lastAttackTarget = createAttackTargetSnapshot(target.target)
                 applyDamage(room, target.target, unit.damage, now, unit.ownerId)
                 return true
             }
@@ -2203,6 +2206,19 @@ function getNpcName(type) {
         }
 
         addLog(room, player.gamerTag + ' captured ' + getStructureName(structure.type) + '.')
+    }
+
+    function createAttackTargetSnapshot(target) {
+        if (!target || !target.value) {
+            return null
+        }
+
+        return {
+            kind: target.kind,
+            x: target.value.x,
+            y: target.value.y,
+            targetId: target.value.structureId || target.value.unitId || target.value.playerId || null,
+        }
     }
 
     function applySplashDamage(room, sourceStructure, target, damage, now) {
@@ -2563,6 +2579,7 @@ function getNpcName(type) {
         }
 
         unit.lastAttackAt = now
+        unit.lastAttackTarget = createAttackTargetSnapshot({ kind: 'structure', value: structure })
         applyDamageToStructure(room, structure, damage, now, unit.ownerId, { removeOnDestroyed: true })
         syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
         return true

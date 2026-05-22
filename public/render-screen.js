@@ -2,6 +2,9 @@ import { getLang, t } from './i18n/index.js'
 
 const STRUCTURE_SPRITE_SIZE = 64
 const UNIT_SPRITE_SIZE = 64
+const RECENT_DAMAGE_MS = 650
+const RECENT_BUILD_MS = 1200
+const RECENT_ATTACK_MS = 520
 const STRUCTURE_SPRITE_FRAMES = {
     castle: 0,
     mine: 1,
@@ -81,6 +84,7 @@ export default function renderScreen(screen, hud, game, requestAnimationFrame, c
 
     context.clearRect(0, 0, width * pixelsPerFields, height * pixelsPerFields)
     drawTerrain(context, game)
+    drawUnitOrders(context, game, currentPlayerId)
     drawBuildRanges(context, game, uiState, currentPlayerId)
     drawSelection(context, game, uiState, currentPlayerId)
     drawRanges(context, game, uiState)
@@ -88,6 +92,7 @@ export default function renderScreen(screen, hud, game, requestAnimationFrame, c
     drawStructures(context, game)
     drawUnits(context, game)
     drawPlayers(context, game, currentPlayerId)
+    drawProjectiles(context, game)
     drawFogOverlay(context, game)
     updateHud(hud, game, currentPlayerId, uiState)
 
@@ -368,6 +373,102 @@ function drawBuildRanges(context, game, uiState, currentPlayerId) {
     context.restore()
 }
 
+function drawUnitOrders(context, game, currentPlayerId) {
+    const player = game.state.players[currentPlayerId]
+
+    if (!player) {
+        return
+    }
+
+    const { pixelsPerFields } = game.state.screen
+
+    for (const unit of Object.values(game.state.units || {})) {
+        if (unit.ownerId !== currentPlayerId || !unit.order) {
+            continue
+        }
+
+        const target = getOrderTarget(game.state, unit.order)
+
+        if (!target) {
+            continue
+        }
+
+        drawOrderPath(context, unit, target, pixelsPerFields, player.color)
+    }
+}
+
+function getOrderTarget(state, order) {
+    if (!order) {
+        return null
+    }
+
+    if (order.type === 'move' && Number.isFinite(order.x) && Number.isFinite(order.y)) {
+        return { x: order.x, y: order.y, kind: 'move' }
+    }
+
+    if (order.type === 'capture') {
+        const structure = state.structures?.[order.structureId] || state.memory?.structures?.[order.structureId]
+        return structure ? { ...structure, kind: 'capture' } : null
+    }
+
+    return null
+}
+
+function drawOrderPath(context, unit, target, size, color) {
+    const startX = (unit.x + 0.5) * size
+    const startY = (unit.y + 0.5) * size
+    const targetX = (target.x + 0.5) * size
+    const targetY = (target.y + 0.5) * size
+
+    context.save()
+    context.strokeStyle = hexToRgba(color, 0.48)
+    context.lineWidth = Math.max(1, size * 0.055)
+    if (typeof context.setLineDash === 'function') {
+        context.setLineDash([Math.max(2, size * 0.18), Math.max(2, size * 0.14)])
+    }
+    context.beginPath()
+    context.moveTo(startX, startY)
+    context.lineTo(targetX, targetY)
+    context.stroke()
+    if (typeof context.setLineDash === 'function') {
+        context.setLineDash([])
+    }
+    drawOrderMarker(context, targetX, targetY, size, color, target.kind)
+    context.restore()
+}
+
+function drawOrderMarker(context, centerX, centerY, size, color, kind) {
+    const radius = size * 0.28
+
+    context.fillStyle = hexToRgba(color, kind === 'capture' ? 0.20 : 0.16)
+    context.strokeStyle = hexToRgba(color, 0.86)
+    context.lineWidth = Math.max(1, size * 0.055)
+
+    if (kind === 'capture') {
+        context.beginPath()
+        context.moveTo(centerX, centerY - radius)
+        context.lineTo(centerX + radius, centerY)
+        context.lineTo(centerX, centerY + radius)
+        context.lineTo(centerX - radius, centerY)
+        context.closePath()
+        context.fill()
+        context.stroke()
+        context.beginPath()
+        context.arc(centerX, centerY, radius * 0.34, 0, Math.PI * 2)
+        context.stroke()
+        return
+    }
+
+    context.beginPath()
+    context.arc(centerX, centerY, radius, 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
+    context.beginPath()
+    context.moveTo(centerX, centerY - radius * 0.85)
+    context.lineTo(centerX, centerY + radius * 0.85)
+    context.lineTo(centerX + radius * 0.58, centerY + radius * 0.38)
+    context.stroke()
+}
 function drawSelection(context, game, uiState, currentPlayerId) {
     if (!uiState.selectedTile) {
         return
@@ -378,20 +479,59 @@ function drawSelection(context, game, uiState, currentPlayerId) {
     const y = uiState.selectedTile.y * pixelsPerFields
     const currentPlayer = game.state.players[currentPlayerId]
     const selectedStructure = getSelectedStructure(game.state, uiState)
+    const selectedActor = getActorAt(game.state, uiState.selectedTile.x, uiState.selectedTile.y)
     const placementStatus = selectedStructure
         ? null
         : getPlacementStatus(game.state, currentPlayer, uiState)
     const color = getSelectionColor(placementStatus)
 
+    drawSelectionMarker(context, x, y, pixelsPerFields, color)
+
+    if (selectedActor) {
+        drawSelectionRing(context, x + pixelsPerFields * 0.5, y + pixelsPerFields * 0.64, pixelsPerFields, color.stroke)
+    } else if (selectedStructure) {
+        drawSelectionRing(context, x + pixelsPerFields * 0.5, y + pixelsPerFields * 0.72, pixelsPerFields, color.stroke)
+    }
+}
+
+function drawSelectionMarker(context, x, y, size, color) {
+    const inset = Math.max(2, size * 0.08)
+    const corner = Math.max(4, size * 0.26)
+
     context.save()
     context.fillStyle = color.fill
     context.strokeStyle = color.stroke
-    context.lineWidth = 2
-    context.fillRect(x + 2, y + 2, pixelsPerFields - 4, pixelsPerFields - 4)
-    context.strokeRect(x + 2, y + 2, pixelsPerFields - 4, pixelsPerFields - 4)
+    context.lineWidth = Math.max(1.5, size * 0.045)
+    context.fillRect(x + inset, y + inset, size - inset * 2, size - inset * 2)
+
+    context.beginPath()
+    context.moveTo(x + inset, y + inset + corner)
+    context.lineTo(x + inset, y + inset)
+    context.lineTo(x + inset + corner, y + inset)
+    context.moveTo(x + size - inset - corner, y + inset)
+    context.lineTo(x + size - inset, y + inset)
+    context.lineTo(x + size - inset, y + inset + corner)
+    context.moveTo(x + size - inset, y + size - inset - corner)
+    context.lineTo(x + size - inset, y + size - inset)
+    context.lineTo(x + size - inset - corner, y + size - inset)
+    context.moveTo(x + inset + corner, y + size - inset)
+    context.lineTo(x + inset, y + size - inset)
+    context.lineTo(x + inset, y + size - inset - corner)
+    context.stroke()
     context.restore()
 }
 
+function drawSelectionRing(context, centerX, centerY, size, color) {
+    context.save()
+    context.strokeStyle = color
+    context.fillStyle = hexToRgba(color, 0.12)
+    context.lineWidth = Math.max(1.5, size * 0.055)
+    context.beginPath()
+    context.ellipse(centerX, centerY, size * 0.36, size * 0.16, 0, 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
+    context.restore()
+}
 function drawRanges(context, game, uiState) {
     const selectedStructure = getSelectedStructure(game.state, uiState)
 
@@ -481,6 +621,7 @@ function drawStructure(context, game, structure, remembered = false) {
     }
 
     if (!remembered) {
+        drawStructureStateEffects(context, structure, x, y, pixelsPerFields, color)
         drawBars(context, x, y, pixelsPerFields, structure)
         drawCaptureProgress(context, game, structure, x, y)
     }
@@ -611,6 +752,99 @@ function drawCaptureProgress(context, game, structure, x, y) {
     context.fillRect(x, y + pixelsPerFields - 4, pixelsPerFields * Math.min(1, progress), 4)
 }
 
+function drawStructureStateEffects(context, structure, x, y, size, color) {
+    drawStructureLevelPips(context, x, y, size, structure.level, color)
+    drawRecentBuildDust(context, x, y, size, structure.createdAt, Date.now(), structure.disabled)
+    drawDamageFlash(context, x, y, size, structure.lastDamagedAt, Date.now())
+}
+
+function drawStructureLevelPips(context, x, y, size, level, color) {
+    const count = clamp(Math.floor(Number(level) || 1), 1, 5)
+    const pipSize = Math.max(2, size * 0.105)
+    const gap = Math.max(1, size * 0.045)
+    const totalWidth = count * pipSize + (count - 1) * gap
+    const startX = x + size - totalWidth - Math.max(2, size * 0.10)
+    const startY = y + size - pipSize - Math.max(2, size * 0.11)
+
+    context.save()
+    context.fillStyle = hexToRgba(color, 0.88)
+    context.strokeStyle = 'rgba(37, 34, 31, 0.55)'
+    context.lineWidth = 1
+    for (let index = 0; index < count; index += 1) {
+        const pipX = startX + index * (pipSize + gap)
+        context.fillRect(pipX, startY, pipSize, pipSize)
+        context.strokeRect(pipX, startY, pipSize, pipSize)
+    }
+    context.restore()
+}
+
+function drawRecentBuildDust(context, x, y, size, createdAt, now, disabled) {
+    if (disabled) {
+        return
+    }
+
+    const progress = getRecentEventProgress(createdAt, now, RECENT_BUILD_MS)
+
+    if (progress <= 0) {
+        return
+    }
+
+    context.save()
+    context.fillStyle = 'rgba(226, 196, 139, ' + (0.36 * progress).toFixed(3) + ')'
+    context.strokeStyle = 'rgba(96, 72, 42, ' + (0.32 * progress).toFixed(3) + ')'
+    context.lineWidth = Math.max(1, size * 0.035)
+
+    for (let index = 0; index < 6; index += 1) {
+        const hashX = tileHash(Math.floor(x / size), Math.floor(y / size), index + 71)
+        const hashY = tileHash(Math.floor(x / size), Math.floor(y / size), index + 83)
+        const dustSize = Math.max(2, size * (0.06 + hashX * 0.05))
+        const dustX = x + size * (0.08 + hashX * 0.84)
+        const dustY = y + size * (0.10 + hashY * 0.80)
+        context.fillRect(dustX, dustY, dustSize, dustSize)
+    }
+
+    context.beginPath()
+    context.moveTo(x + size * 0.16, y + size * 0.82)
+    context.lineTo(x + size * 0.84, y + size * 0.18)
+    context.moveTo(x + size * 0.16, y + size * 0.18)
+    context.lineTo(x + size * 0.84, y + size * 0.82)
+    context.stroke()
+    context.restore()
+}
+
+function drawDamageFlash(context, x, y, size, damagedAt, now) {
+    const progress = getRecentEventProgress(damagedAt, now, RECENT_DAMAGE_MS)
+
+    if (progress <= 0) {
+        return false
+    }
+
+    context.save()
+    context.fillStyle = 'rgba(255, 245, 220, ' + (0.24 * progress).toFixed(3) + ')'
+    context.fillRect(x, y, size, size)
+    context.strokeStyle = 'rgba(209, 73, 91, ' + (0.72 * progress).toFixed(3) + ')'
+    context.lineWidth = Math.max(1.5, size * 0.065)
+    context.strokeRect(x + 2, y + 2, size - 4, size - 4)
+    context.restore()
+    return true
+}
+
+function getRecentEventProgress(timestamp, now, duration) {
+    const eventAt = Number(timestamp)
+    const current = Number(now)
+
+    if (!Number.isFinite(eventAt) || !Number.isFinite(current) || eventAt <= 0 || duration <= 0) {
+        return 0
+    }
+
+    const age = current - eventAt
+
+    if (age < 0 || age > duration) {
+        return 0
+    }
+
+    return 1 - age / duration
+}
 function drawBars(context, x, y, size, entity) {
     const health = Math.max(0, entity.integrity) / entity.maxIntegrity
     const shield = entity.maxBarrier > 0 ? Math.max(0, entity.barrier) / entity.maxBarrier : 0
@@ -642,6 +876,7 @@ function drawUnits(context, game) {
             drawFallbackUnit(context, unit, owner, pixelsPerFields)
         }
 
+        drawDamageFlash(context, x, y, pixelsPerFields, unit.lastDamagedAt, Date.now())
         drawBars(context, x, y, pixelsPerFields, unit)
         context.restore()
     }
@@ -779,11 +1014,137 @@ function drawPlayers(context, game, currentPlayerId) {
         context.closePath()
         context.fill()
         context.stroke()
+        drawDamageFlash(context, player.x * pixelsPerFields, player.y * pixelsPerFields, pixelsPerFields, player.lastDamagedAt, Date.now())
         drawBars(context, player.x * pixelsPerFields, player.y * pixelsPerFields, pixelsPerFields, player)
         context.restore()
     }
 }
 
+function drawProjectiles(context, game) {
+    const now = Date.now()
+    const sources = [
+        ...Object.values(game.state.structures || {}),
+        ...Object.values(game.state.units || {}),
+    ]
+
+    for (const source of sources) {
+        if (!source.lastAttackTarget) {
+            continue
+        }
+
+        const progress = getRecentEventProgress(source.lastAttackAt, now, RECENT_ATTACK_MS)
+
+        if (progress <= 0) {
+            continue
+        }
+
+        drawProjectile(context, source, source.lastAttackTarget, game.state.screen.pixelsPerFields, progress, getAttackSourceOwnerColor(game.state, source))
+    }
+}
+
+function drawProjectile(context, source, target, size, progress, color) {
+    if (!Number.isFinite(target.x) || !Number.isFinite(target.y)) {
+        return false
+    }
+
+    const startX = (source.x + 0.5) * size
+    const startY = (source.y + 0.5) * size
+    const targetX = (target.x + 0.5) * size
+    const targetY = (target.y + 0.5) * size
+    const phase = clamp(1 - progress, 0, 1)
+
+    if (source.type === 'soldier' || source.type === 'herald') {
+        drawMeleeStrike(context, targetX, targetY, size, phase, color)
+        return true
+    }
+
+    if (source.type === 'catapult') {
+        drawStoneProjectile(context, startX, startY, targetX, targetY, size, phase)
+    } else {
+        drawArrowProjectile(context, startX, startY, targetX, targetY, size, phase, color)
+    }
+
+    if (phase > 0.58) {
+        drawImpactPulse(context, targetX, targetY, size, (phase - 0.58) / 0.42, color)
+    }
+
+    return true
+}
+
+function drawArrowProjectile(context, startX, startY, targetX, targetY, size, phase, color) {
+    const x = startX + (targetX - startX) * phase
+    const y = startY + (targetY - startY) * phase
+    const angle = Math.atan2(targetY - startY, targetX - startX)
+
+    context.save()
+    context.translate(x, y)
+    context.rotate(angle)
+    context.strokeStyle = hexToRgba(color, 0.86)
+    context.fillStyle = '#f6f0d8'
+    context.lineWidth = Math.max(1.5, size * 0.05)
+    context.beginPath()
+    context.moveTo(-size * 0.24, 0)
+    context.lineTo(size * 0.18, 0)
+    context.stroke()
+    context.beginPath()
+    context.moveTo(size * 0.22, 0)
+    context.lineTo(size * 0.04, -size * 0.08)
+    context.lineTo(size * 0.04, size * 0.08)
+    context.closePath()
+    context.fill()
+    context.restore()
+}
+
+function drawStoneProjectile(context, startX, startY, targetX, targetY, size, phase) {
+    const arcHeight = Math.sin(phase * Math.PI) * size * 0.72
+    const x = startX + (targetX - startX) * phase
+    const y = startY + (targetY - startY) * phase - arcHeight
+
+    context.save()
+    context.fillStyle = '#5e5951'
+    context.strokeStyle = 'rgba(37, 34, 31, 0.72)'
+    context.lineWidth = Math.max(1, size * 0.035)
+    context.beginPath()
+    context.arc(x, y, Math.max(2, size * 0.11), 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
+    context.restore()
+}
+
+function drawMeleeStrike(context, targetX, targetY, size, phase, color) {
+    const alpha = Math.sin(phase * Math.PI)
+
+    context.save()
+    context.strokeStyle = hexToRgba(color, 0.74 * alpha)
+    context.lineWidth = Math.max(2, size * 0.075)
+    context.beginPath()
+    context.arc(targetX, targetY, size * 0.30, -0.8 + phase * 0.7, 0.95 + phase * 0.7)
+    context.stroke()
+    drawImpactPulse(context, targetX, targetY, size, alpha, color)
+    context.restore()
+}
+
+function drawImpactPulse(context, targetX, targetY, size, intensity, color) {
+    const alpha = clamp(intensity, 0, 1)
+
+    if (alpha <= 0) {
+        return
+    }
+
+    context.save()
+    context.strokeStyle = hexToRgba(color, 0.42 * (1 - alpha * 0.35))
+    context.fillStyle = 'rgba(255, 245, 220, ' + (0.14 * alpha).toFixed(3) + ')'
+    context.lineWidth = Math.max(1, size * 0.045)
+    context.beginPath()
+    context.ellipse(targetX, targetY, size * (0.16 + alpha * 0.16), size * (0.10 + alpha * 0.10), 0, 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
+    context.restore()
+}
+
+function getAttackSourceOwnerColor(state, source) {
+    return state.players?.[source.ownerId]?.color || '#d4af37'
+}
 function structureLabel(type) {
     return translatedLabel('structure.' + type + '.label', type)
 }
@@ -1603,6 +1964,12 @@ export const __renderTestables = {
     drawFogOverlay,
     drawTerrainImage,
     drawTerrainGrid,
+    drawUnitOrders,
+    getOrderTarget,
+    drawOrderPath,
+    drawOrderMarker,
+    drawSelectionMarker,
+    drawSelectionRing,
     drawTerrainTiles,
     drawGrassTile,
     drawRoadTile,
@@ -1611,6 +1978,18 @@ export const __renderTestables = {
     tileKey,
     drawStructureSprite,
     drawUnitSprite,
+    drawStructureStateEffects,
+    drawStructureLevelPips,
+    drawRecentBuildDust,
+    drawDamageFlash,
+    getRecentEventProgress,
+    drawProjectiles,
+    drawProjectile,
+    drawArrowProjectile,
+    drawStoneProjectile,
+    drawMeleeStrike,
+    drawImpactPulse,
+    getAttackSourceOwnerColor,
     isImageReady,
     setRenderAssetsForTests,
     hasRememberedStructureAt,
