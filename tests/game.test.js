@@ -395,7 +395,7 @@ describe('createGame', () => {
 
             let state = game.getPublicState(match.hostKey)
             expect(getPlayer(state, 'player-1').unlocked.archer).toBe(true)
-            expect(getPlayer(state, 'player-1').wisdom).toBe(1)
+            expect(getPlayer(state, 'player-1').wisdom).toBeCloseTo(5 / 3, 4)
             expect(getStructure(state, structure => structure.type === 'library' && structure.ownerId === 'player-1')).toBeDefined()
 
             const neutralCover = getStructure(state, structure => structure.type === 'mine' && structure.ownerId === null)
@@ -544,7 +544,7 @@ describe('createGame', () => {
 
             jest.advanceTimersByTime(10000)
             state = game.getPublicState(match.hostKey)
-            expect(state.units[unit.unitId].x).toBeGreaterThan(unit.x)
+            expect({ x: state.units[unit.unitId].x, y: state.units[unit.unitId].y }).not.toEqual({ x: unit.x, y: unit.y })
 
             jest.advanceTimersByTime(200000)
             state = game.getPublicState(match.hostKey)
@@ -658,6 +658,38 @@ describe('createGame', () => {
         }
     })
 
+
+    test('starts new towers on cooldown instead of firing immediately', () => {
+        const game = createGame()
+        const match = game.createMatch({ playerId: 'player-1', gamerTag: 'Alice' })
+        game.joinMatch({ playerId: 'player-2', gamerTag: 'Bob', hostKey: match.hostKey })
+        const room = game.__testing.getRoom(match.hostKey)
+        const hooks = game.__testing
+        const buildAt = 100000
+        const playerTwo = room.players['player-2']
+        const baseTwo = room.structures[playerTwo.castleId]
+
+        room.units = {}
+        playerTwo.avatarDeployed = true
+        playerTwo.respawnAt = null
+        playerTwo.x = baseTwo.x
+        playerTwo.y = baseTwo.y - 2
+        playerTwo.integrity = playerTwo.maxIntegrity
+        playerTwo.barrier = playerTwo.maxBarrier
+
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(buildAt)
+        const tower = hooks.createStructure(room, { ownerId: 'player-1', type: 'archer', x: baseTwo.x - 1, y: baseTwo.y })
+        nowSpy.mockRestore()
+
+        const barrierBefore = playerTwo.barrier
+        const archerCooldown = game.getPublicState(match.hostKey).catalog.structures.archer.attackEveryMs
+        expect(tower.createdAt).toBe(buildAt)
+        expect(tower.lastAttackAt).toBe(buildAt)
+        expect(hooks.processTowerAttacks(room, buildAt + archerCooldown - 1)).toBe(false)
+        expect(playerTwo.barrier).toBe(barrierBefore)
+        expect(hooks.processTowerAttacks(room, buildAt + archerCooldown)).toBe(true)
+        expect(playerTwo.barrier).toBeLessThan(barrierBefore)
+    })
 
     test('covers rare game internals for failed spawns, cooldowns, splash, and cleanup', () => {
         const game = createGame()
@@ -868,8 +900,9 @@ describe('createGame', () => {
             lastAttackAt: 0,
         }
         expect(hooks.regenerateBarriers(room, now)).toBe(true)
-        expect(room.units['regen-unit'].barrier).toBe(9)
-        expect(playerOne.barrier).toBe(9)
+        const regenPerTick = game.getPublicState(match.hostKey).config.shieldRegenPerSecond * game.getPublicState(match.hostKey).config.tickRateMs / 1000
+        expect(room.units['regen-unit'].barrier).toBe(1 + regenPerTick)
+        expect(playerOne.barrier).toBe(1 + regenPerTick)
 
         const cooldownTower = hooks.createStructure(room, { ownerId: 'player-1', type: 'archer', x: 0, y: 0 })
         cooldownTower.lastAttackAt = now
@@ -1321,6 +1354,7 @@ describe('createGame', () => {
         herald.order = { type: 'move', x: herald.x, y: herald.y }
         expect(hooks.processCaptureUnitOrder(room, herald, Date.now())).toBe(true)
         herald.order = { type: 'move', x: herald.x + 1, y: herald.y }
+        herald.lastMovedAt = 0
         expect(hooks.processCaptureUnitOrder(room, herald, Date.now())).toBe(true)
     })
 

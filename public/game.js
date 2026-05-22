@@ -14,8 +14,9 @@ const CONFIG = {
     playerMaxBarrier: 40,
     playerDamage: 20,
     playerAttackRange: 1.5,
-    playerAttackEveryMs: 1000,
-    tickRateMs: 1000,
+    playerAttackEveryMs: 900,
+    tickRateMs: 1000 / 60,
+    aiDecisionCooldownMs: 1000,
     shieldRegenDelayMs: 3000,
     shieldRegenPerSecond: 8,
     maxPlayersPerRoom: 8,
@@ -66,7 +67,7 @@ const STRUCTURES = {
         damage: 5,
         attackRange: 20,
         sightRange: 20,
-        attackEveryMs: 1000,
+        attackEveryMs: 1250,
         captureable: true,
         buildable: true,
         requiresResearch: 'archer',
@@ -81,7 +82,7 @@ const STRUCTURES = {
         splashRadius: 2,
         attackRange: 10,
         sightRange: 10,
-        attackEveryMs: 1000,
+        attackEveryMs: 2200,
         captureable: true,
         buildable: true,
         requiresResearch: 'catapult',
@@ -124,7 +125,7 @@ const NPCS = {
         damage: 20,
         attackRange: 1.5,
         sightRange: 4,
-        attackEveryMs: 1000,
+        attackEveryMs: 1100,
         speed: 1,
     },
     soldier: {
@@ -134,7 +135,7 @@ const NPCS = {
         damage: 10,
         attackRange: 1,
         sightRange: 3,
-        attackEveryMs: 1000,
+        attackEveryMs: 1300,
         speed: 1,
         integrityPerBarracksLevel: 10,
         barrierPerBarracksLevel: 5,
@@ -1080,6 +1081,7 @@ function getNpcName(type) {
         const structureId = command.structureId || `s-${room.nextStructureId++}`
         const maxIntegrity = getMaxIntegrity(command.type, 1)
         const maxBarrier = getMaxBarrier(command.type, 1)
+        const createdAt = Date.now()
 
         const structure = {
             structureId,
@@ -1094,9 +1096,9 @@ function getNpcName(type) {
             maxBarrier,
             disabled: Boolean(command.disabled),
             capture: null,
-            lastAttackAt: 0,
+            lastAttackAt: createdAt,
             lastDamagedAt: 0,
-            createdAt: Date.now(),
+            createdAt,
             cost: catalog.cost,
         }
 
@@ -1350,6 +1352,7 @@ function getNpcName(type) {
             damage,
             lastAttackAt: 0,
             lastDamagedAt: 0,
+            lastMovedAt: Date.now(),
             createdAt: Date.now(),
         }
 
@@ -1426,6 +1429,7 @@ function getNpcName(type) {
             order: null,
             lastAttackAt: 0,
             lastDamagedAt: 0,
+            lastMovedAt: Date.now(),
             createdAt: Date.now(),
         }
 
@@ -1723,11 +1727,16 @@ function getNpcName(type) {
             return false
         }
 
+        if (!canUnitMove(unit, now)) {
+            return false
+        }
+
         const nextTile = getStepToward(room, unit, target)
 
         if (nextTile) {
             unit.x = nextTile.x
             unit.y = nextTile.y
+            unit.lastMovedAt = now
             syncPlayerToCaptureUnit(room.players[unit.ownerId], unit)
 
             if (unit.type === 'herald') {
@@ -1744,6 +1753,22 @@ function getNpcName(type) {
         }
 
         return attackMovementObstacle(room, unit, obstacle, now)
+    }
+
+    function canUnitMove(unit, now) {
+        const lastMovedAt = Number(unit.lastMovedAt)
+
+        if (!Number.isFinite(lastMovedAt) || lastMovedAt <= 0) {
+            return true
+        }
+
+        return now - lastMovedAt >= getUnitMoveEveryMs(unit)
+    }
+
+    function getUnitMoveEveryMs(unit) {
+        const catalogSpeed = NPCS[unit.type]?.speed ?? 1
+        const speed = Math.max(0.1, Number(unit.speed ?? catalogSpeed) || catalogSpeed)
+        return 1000 / speed
     }
 
     function attackWithUnit(room, unit, target, now) {
@@ -1814,7 +1839,7 @@ function getNpcName(type) {
                 continue
             }
 
-            const cooldownMs = aiAgent.cooldownMs ?? CONFIG.tickRateMs
+            const cooldownMs = aiAgent.cooldownMs ?? CONFIG.aiDecisionCooldownMs
 
             if (now - memory.lastDecisionAt < cooldownMs) {
                 continue
@@ -1863,17 +1888,25 @@ function getNpcName(type) {
             }
 
             if (structure.type === 'mine') {
-                player.gold += getGoldRate(structure)
+                player.gold += getGoldRate(structure) * getTickSeconds()
                 changed = true
             }
 
             if (structure.type === 'library') {
-                player.wisdom += getWisdomRate(structure)
+                player.wisdom += getWisdomRate(structure) * getTickSeconds()
                 changed = true
             }
         }
 
         return changed
+    }
+
+    function getTickSeconds() {
+        return CONFIG.tickRateMs / 1000
+    }
+
+    function getBarrierRegenPerTick() {
+        return CONFIG.shieldRegenPerSecond * getTickSeconds()
     }
 
     function regenerateBarriers(room, now) {
@@ -1887,7 +1920,7 @@ function getNpcName(type) {
             }
 
             if (now - structure.lastDamagedAt >= CONFIG.shieldRegenDelayMs) {
-                structure.barrier = Math.min(structure.maxBarrier, structure.barrier + CONFIG.shieldRegenPerSecond)
+                structure.barrier = Math.min(structure.maxBarrier, structure.barrier + getBarrierRegenPerTick())
                 changed = true
             }
         }
@@ -1900,7 +1933,7 @@ function getNpcName(type) {
             }
 
             if (now - unit.lastDamagedAt >= CONFIG.shieldRegenDelayMs) {
-                unit.barrier = Math.min(unit.maxBarrier, unit.barrier + CONFIG.shieldRegenPerSecond)
+                unit.barrier = Math.min(unit.maxBarrier, unit.barrier + getBarrierRegenPerTick())
                 changed = true
             }
         }
@@ -1913,7 +1946,7 @@ function getNpcName(type) {
             }
 
             if (now - player.lastDamagedAt >= CONFIG.shieldRegenDelayMs) {
-                player.barrier = Math.min(player.maxBarrier, player.barrier + CONFIG.shieldRegenPerSecond)
+                player.barrier = Math.min(player.maxBarrier, player.barrier + getBarrierRegenPerTick())
                 changed = true
             }
         }
@@ -2630,7 +2663,7 @@ function getNpcName(type) {
         player.barrier = Math.max(0, unit.barrier)
         player.maxBarrier = unit.maxBarrier
         player.activeCaptureUnitId = unit.unitId
-        player.lastMovedAt = Date.now()
+        player.lastMovedAt = unit.lastMovedAt || Date.now()
         player.lastDamagedAt = unit.lastDamagedAt
     }
 
