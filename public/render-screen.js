@@ -1,6 +1,7 @@
 import { getLang, t } from './i18n/index.js'
 
 const STRUCTURE_SPRITE_SIZE = 64
+const UNIT_SPRITE_SIZE = 64
 const STRUCTURE_SPRITE_FRAMES = {
     castle: 0,
     mine: 1,
@@ -9,9 +10,14 @@ const STRUCTURE_SPRITE_FRAMES = {
     catapult: 4,
     barracks: 5,
 }
+const UNIT_SPRITE_FRAMES = {
+    herald: 0,
+    soldier: 1,
+}
 const renderAssets = {
     terrainImage: createImageAsset('/img/terrain.png'),
     structureSpriteSheet: createImageAsset('/img/icons_game.png'),
+    unitSpriteSheet: createImageAsset('/img/units_game.png'),
 }
 
 export function preloadRenderAssets() {
@@ -515,6 +521,7 @@ function isImageReady(image) {
 function setRenderAssetsForTests(assets = {}) {
     renderAssets.terrainImage = assets.terrainImage || null
     renderAssets.structureSpriteSheet = assets.structureSpriteSheet || null
+    renderAssets.unitSpriteSheet = assets.unitSpriteSheet || null
 }
 
 function drawCastle(context, x, y, size, color) {
@@ -627,32 +634,69 @@ function drawUnits(context, game) {
     for (const unitId in game.state.units) {
         const unit = game.state.units[unitId]
         const owner = game.state.players[unit.ownerId]
-        const x = (unit.x + 0.5) * pixelsPerFields
-        const y = (unit.y + 0.5) * pixelsPerFields
-        const radius = pixelsPerFields * 0.32
+        const x = unit.x * pixelsPerFields
+        const y = unit.y * pixelsPerFields
 
         context.save()
-        context.fillStyle = owner ? owner.color : '#2f2a25'
-        context.strokeStyle = '#2f2a25'
-        context.beginPath()
-        context.arc(x, y, radius, 0, Math.PI * 2)
-        context.fill()
-        context.stroke()
-        context.fillStyle = '#f6f0d8'
-
-        if (unit.type === 'herald') {
-            context.beginPath()
-            context.moveTo(x, y - radius * 0.62)
-            context.lineTo(x + radius * 0.54, y + radius * 0.46)
-            context.lineTo(x - radius * 0.54, y + radius * 0.46)
-            context.closePath()
-            context.fill()
-        } else {
-            context.fillRect(x - radius * 0.35, y - radius * 0.2, radius * 0.7, radius * 0.4)
+        if (!drawUnitSprite(context, unit.type, x, y, pixelsPerFields, owner?.color || '#2f2a25')) {
+            drawFallbackUnit(context, unit, owner, pixelsPerFields)
         }
 
-        drawBars(context, unit.x * pixelsPerFields, unit.y * pixelsPerFields, pixelsPerFields, unit)
+        drawBars(context, x, y, pixelsPerFields, unit)
         context.restore()
+    }
+}
+
+function drawUnitSprite(context, type, x, y, size, ownerColor) {
+    const frame = UNIT_SPRITE_FRAMES[type]
+    const spriteSheet = renderAssets.unitSpriteSheet
+
+    if (frame === undefined || !isImageReady(spriteSheet) || typeof context.drawImage !== 'function') {
+        return false
+    }
+
+    context.save()
+    context.fillStyle = hexToRgba(ownerColor, 0.32)
+    context.beginPath()
+    context.ellipse(x + size * 0.5, y + size * 0.82, size * 0.32, size * 0.12, 0, 0, Math.PI * 2)
+    context.fill()
+    context.drawImage(
+        spriteSheet,
+        frame * UNIT_SPRITE_SIZE,
+        0,
+        UNIT_SPRITE_SIZE,
+        UNIT_SPRITE_SIZE,
+        x,
+        y,
+        size,
+        size,
+    )
+    context.restore()
+    return true
+}
+
+function drawFallbackUnit(context, unit, owner, pixelsPerFields) {
+    const x = (unit.x + 0.5) * pixelsPerFields
+    const y = (unit.y + 0.5) * pixelsPerFields
+    const radius = pixelsPerFields * 0.32
+
+    context.fillStyle = owner ? owner.color : '#2f2a25'
+    context.strokeStyle = '#2f2a25'
+    context.beginPath()
+    context.arc(x, y, radius, 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
+    context.fillStyle = '#f6f0d8'
+
+    if (unit.type === 'herald') {
+        context.beginPath()
+        context.moveTo(x, y - radius * 0.62)
+        context.lineTo(x + radius * 0.54, y + radius * 0.46)
+        context.lineTo(x - radius * 0.54, y + radius * 0.46)
+        context.closePath()
+        context.fill()
+    } else {
+        context.fillRect(x - radius * 0.35, y - radius * 0.2, radius * 0.7, radius * 0.4)
     }
 }
 
@@ -1566,6 +1610,7 @@ export const __renderTestables = {
     getRoadMask,
     tileKey,
     drawStructureSprite,
+    drawUnitSprite,
     isImageReady,
     setRenderAssetsForTests,
     hasRememberedStructureAt,

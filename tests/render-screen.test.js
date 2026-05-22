@@ -217,8 +217,9 @@ describe('render-screen', () => {
         const game = createGameState()
         const terrainImage = { complete: true, naturalWidth: 1536 }
         const spriteSheet = { complete: true, naturalWidth: 384 }
+        const unitSpriteSheet = { complete: true, naturalWidth: 128 }
 
-        __renderTestables.setRenderAssetsForTests({ terrainImage, structureSpriteSheet: spriteSheet })
+        __renderTestables.setRenderAssetsForTests({ terrainImage, structureSpriteSheet: spriteSheet, unitSpriteSheet })
         renderScreen(canvas, { innerHTML: '', __lastHtml: null }, game, jest.fn(), 'p1', {
             selectedTile: { x: 1, y: 1 },
             selectedStructureId: 'castle-1',
@@ -228,8 +229,10 @@ describe('render-screen', () => {
         expect(context.__calls.filter(call => call[0] === 'drawImage').length).toBeGreaterThan(1)
         expect(__renderTestables.isImageReady(terrainImage)).toBe(true)
         expect(__renderTestables.isImageReady(spriteSheet)).toBe(true)
+        expect(__renderTestables.isImageReady(unitSpriteSheet)).toBe(true)
         expect(__renderTestables.drawTerrainImage(context, 100, 50)).toBe(false)
         expect(__renderTestables.drawStructureSprite(context, 'missing', 0, 0, 10, '#000')).toBe(false)
+        expect(__renderTestables.drawUnitSprite(context, 'missing', 0, 0, 10, '#000')).toBe(false)
 
         const roadMap = __renderTestables.buildRoadMap(game.state)
         expect(roadMap.has(__renderTestables.tileKey(1, 1))).toBe(true)
