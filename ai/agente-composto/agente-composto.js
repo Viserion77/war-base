@@ -32,6 +32,7 @@ export function createCompositeWarBaseAgent(options = {}) {
     const networks = options.networks || loadCompositeNetworks(options.networksDir || DEFAULT_NETWORKS_DIR)
     const frameBuffer = options.frameBuffer || createFrameBuffer()
     const heuristicFallback = options.heuristicFallback ?? true
+    const onSnapshot = typeof options.onSnapshot === 'function' ? options.onSnapshot : null
 
     return {
         cooldownMs: options.cooldownMs ?? 1000,
@@ -41,6 +42,7 @@ export function createCompositeWarBaseAgent(options = {}) {
             return decideWithNetworks(networks, context.state, context.playerId, {
                 frameBuffer,
                 heuristicFallback,
+                onSnapshot,
             })
         },
     }
@@ -87,11 +89,26 @@ export function createZeroNetwork(outputs) {
 export function decideWithNetworks(networks, state, playerId, options = {}) {
     const frameBuffer = options.frameBuffer || createFrameBuffer()
     const input = createCompositeInput(state, playerId, frameBuffer)
-    const macroScores = predictNetwork(networks.router, input)
+    const routerResult = predictNetworkWithHidden(networks.router, input)
+    const macroScores = routerResult.output
     const bestMacroScore = Math.max(...macroScores, 0)
+    const emitSnapshot = (chosenMacro, subnetworkActivated) => {
+        if (typeof options.onSnapshot === 'function') {
+            options.onSnapshot({
+                playerId,
+                input,
+                hiddenActivations: routerResult.hidden,
+                macroScores,
+                chosenMacro,
+                subnetworkActivated,
+            })
+        }
+    }
 
     if (bestMacroScore <= 0) {
-        return options.heuristicFallback ? decideHeuristically(state, playerId) : null
+        const fallback = options.heuristicFallback ? decideHeuristically(state, playerId) : null
+        emitSnapshot('wait', fallback?.aiDecision?.policy || null)
+        return fallback
     }
 
     for (const choice of rankByScores(MACRO_ACTIONS, macroScores)) {
@@ -102,6 +119,7 @@ export function decideWithNetworks(networks, state, playerId, options = {}) {
         const command = buildCommandFromMacro(choice.label, networks, input, state, playerId)
 
         if (command) {
+            emitSnapshot(choice.label, choice.label)
             return {
                 ...command,
                 aiDecision: {
@@ -112,6 +130,7 @@ export function decideWithNetworks(networks, state, playerId, options = {}) {
         }
     }
 
+    emitSnapshot('wait', null)
     return null
 }
 
@@ -248,6 +267,17 @@ export function predictNetwork(network, input) {
     }
 
     return network.predict(input)
+}
+
+export function predictNetworkWithHidden(network, input) {
+    if (network && typeof network.predictWithHidden === 'function') {
+        return network.predictWithHidden(input)
+    }
+
+    return {
+        hidden: [],
+        output: predictNetwork(network, input),
+    }
 }
 
 export function decideHeuristically(state, playerId) {

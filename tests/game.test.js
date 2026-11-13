@@ -1417,5 +1417,90 @@ describe('createGame', () => {
         expect(hooks.processCaptureUnitOrder(room, herald, Date.now())).toBe(true)
     })
 
+    test('emits training-friendly events for builds, research, units and destruction', () => {
+        const game = createGame()
+        const debugEntries = []
+        game.subscribeDebug(entry => debugEntries.push(entry))
+        const match = game.createMatch({ playerId: 'p1', gamerTag: 'Alice' })
+        const room = game.__testing.getRoom(match.hostKey)
+        const player = room.players.p1
+        const hooks = game.__testing
 
+        player.gold = 9000
+        player.wisdom = 200
+        player.unlocked.barracks = true
+        const castle = room.structures[player.castleId]
+        castle.level = 3
+        hooks.buildStructure(room, player, { structureType: 'mine', x: castle.x + 2, y: castle.y })
+        const library = hooks.createStructure(room, { ownerId: 'p1', type: 'library', x: castle.x + 1, y: castle.y })
+        library.level = 2
+        hooks.researchRecipe(room, player, { recipe: 'archer' })
+
+        const barracks = hooks.createStructure(room, { ownerId: 'p1', type: 'barracks', x: castle.x + 3, y: castle.y })
+        hooks.spawnNpc(room, player, { npcType: 'soldier' })
+
+        const soldier = Object.values(room.units).find(unit => unit.type === 'soldier' && unit.ownerId === 'p1')
+        hooks.applyDamageToUnit(room, soldier, soldier.integrity + soldier.barrier + 10, 1000, 'enemy')
+
+        const targetStructure = hooks.createStructure(room, { ownerId: 'p1', type: 'archer', x: castle.x + 4, y: castle.y })
+        hooks.applyDamageToStructure(room, targetStructure, targetStructure.integrity + targetStructure.barrier + 10, 2000, 'enemy')
+
+        const removable = hooks.createStructure(room, { ownerId: 'p1', type: 'catapult', x: castle.x + 5, y: castle.y })
+        hooks.applyDamageToStructure(room, removable, removable.integrity + removable.barrier + 10, 2500, 'enemy', { removeOnDestroyed: true })
+
+        const herald = Object.values(room.units).find(unit => unit.type === 'herald' && unit.ownerId === 'p1')
+        herald.integrity = 1
+        herald.barrier = 0
+        hooks.applyDamageToUnit(room, herald, 10, 3000, 'enemy')
+
+        const events = debugEntries.map(entry => entry.event)
+        expect(events).toEqual(expect.arrayContaining([
+            'build:success',
+            'research:success',
+            'unit:created',
+            'unit:killed',
+            'structure:destroyed',
+        ]))
+
+        const castleDestroyer = hooks.createStructure(room, { ownerId: 'p1', type: 'castle', x: 1, y: 1 })
+        player.castleId = castleDestroyer.structureId
+        hooks.eliminatePlayer(room, 'p1', 'attacker')
+        const eliminated = debugEntries.filter(entry => entry.event === 'structure:destroyed' && entry.details.structureType === 'castle')
+        expect(eliminated.length).toBeGreaterThan(0)
+    })
+
+    test('per-player agent resolver overrides the global agent and supports autoplay without aiAgent', () => {
+        const decide = jest.fn(({ playerId }) => ({ action: 'build', structureType: 'mine', x: 1, y: 1, fromPlayer: playerId }))
+        const game = createGame({
+            getAgentForPlayer(playerId) {
+                if (playerId === 'auto-player') {
+                    return { cooldownMs: 0, decide }
+                }
+
+                return null
+            },
+        })
+        const match = game.createMatch({ playerId: 'auto-player', gamerTag: 'AutoPilot' })
+        const result = game.executeAction({ playerId: 'auto-player', hostKey: match.hostKey, action: 'toggle-autoplay', enabled: true })
+
+        expect(result).toBe(true)
+        const room = game.__testing.getRoom(match.hostKey)
+        room.aiPlayers['auto-player'].lastDecisionAt = 0
+        expect(game.__testing.runAiPlayers(room, 5000)).toBeDefined()
+        expect(decide).toHaveBeenCalled()
+    })
+
+    test('runAiPlayers skips players when no agent resolves and falls back to global agent', () => {
+        const globalDecide = jest.fn(() => null)
+        const game = createGame({
+            aiAgent: { cooldownMs: 0, decide: globalDecide },
+            getAgentForPlayer: () => null,
+        })
+        const match = game.createMatch({ playerId: 'p1', gamerTag: 'Alice' })
+        const room = game.__testing.getRoom(match.hostKey)
+        room.aiPlayers['p1'] = { playerId: 'p1', addedAt: 0, lastDecisionAt: 0, autoplay: true }
+        room.players['p1'].autoplay = true
+        expect(game.__testing.runAiPlayers(room, 5000)).toBe(false)
+        expect(globalDecide).toHaveBeenCalled()
+    })
 })

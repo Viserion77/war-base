@@ -59,6 +59,10 @@ export default class NeuralNetwork {
     }
 
     predict(inputArray) {
+        return this.predictWithHidden(inputArray).output
+    }
+
+    predictWithHidden(inputArray) {
         const input = Matrix.fromArray(inputArray)
         const hidden = Matrix
             .add(Matrix.multiply(this.inputHiddenWeights, input), this.inputHiddenBias)
@@ -67,7 +71,10 @@ export default class NeuralNetwork {
             .add(Matrix.multiply(this.hiddenOutputWeights, hidden), this.hiddenOutputBias)
             .map(sigmoid)
 
-        return Matrix.toArray(output)
+        return {
+            hidden: Matrix.toArray(hidden),
+            output: Matrix.toArray(output),
+        }
     }
 
     toJSON() {

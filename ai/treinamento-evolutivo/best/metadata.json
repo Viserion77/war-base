@@ -1,0 +1,47 @@
+{
+  "generation": 1,
+  "winnerId": "ai-0",
+  "durationTicks": 500,
+  "finalScores": {
+    "ai-0": 31,
+    "ai-1": 31,
+    "ai-2": 31,
+    "ai-3": 31
+  },
+  "breakdown": {
+    "ai-0": {
+      "structure:destroyed": 0,
+      "upgrade:success": 0,
+      "build:success": 1,
+      "research:success": 0,
+      "unit:created": 1,
+      "unit:killed": 0
+    },
+    "ai-1": {
+      "structure:destroyed": 0,
+      "upgrade:success": 0,
+      "build:success": 1,
+      "research:success": 0,
+      "unit:created": 1,
+      "unit:killed": 0
+    },
+    "ai-2": {
+      "structure:destroyed": 0,
+      "upgrade:success": 0,
+      "build:success": 1,
+      "research:success": 0,
+      "unit:created": 1,
+      "unit:killed": 0
+    },
+    "ai-3": {
+      "structure:destroyed": 0,
+      "upgrade:success": 0,
+      "build:success": 1,
+      "research:success": 0,
+      "unit:created": 1,
+      "unit:killed": 0
+    }
+  },
+  "mode": "score",
+  "timedOut": true
+}

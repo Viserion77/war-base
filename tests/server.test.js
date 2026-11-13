@@ -5,10 +5,12 @@ import http from 'http'
 import { afterEach, describe, expect, jest, test } from '@jest/globals'
 import {
     appendRoomLogEntry,
+    createTrainingBroadcaster,
     createWarBaseServer,
     emitGameCommand,
     normalizeHostKey,
     registerSocketHandlers,
+    registerTrainingHandlers,
 } from '../server.js'
 
 function createFakeSockets() {
@@ -390,5 +392,152 @@ describe('server infrastructure', () => {
         }
     })
 
+    test('createTrainingBroadcaster fans events to subscribed sockets only', () => {
+        const fakeSockets = createFakeSockets()
+        const broadcaster = createTrainingBroadcaster(fakeSockets)
+        const socket = { emit: jest.fn() }
+        const other = { emit: jest.fn() }
+
+        broadcaster.subscribe(socket)
+        broadcaster.subscribe(other)
+        broadcaster.broadcast('training:started', { generation: 1 })
+
+        broadcaster.unsubscribe(other)
+        broadcaster.broadcast('training:stopped', { lastGeneration: 1 })
+
+        expect(socket.emit).toHaveBeenCalledWith('training:started', { generation: 1 })
+        expect(socket.emit).toHaveBeenCalledWith('training:stopped', { lastGeneration: 1 })
+        expect(other.emit).toHaveBeenCalledTimes(1)
+        expect(broadcaster.size()).toBe(1)
+        expect(broadcaster.sockets).toBe(fakeSockets)
+    })
+
+    test('registerTrainingHandlers wires socket events to the engine and broadcaster', () => {
+        const broadcastEvents = []
+        const subscribed = new Set()
+        const broadcaster = {
+            subscribe: jest.fn(socket => subscribed.add(socket)),
+            unsubscribe: jest.fn(socket => subscribed.delete(socket)),
+            broadcast: (event, payload) => broadcastEvents.push({ event, payload }),
+            size: () => subscribed.size,
+        }
+        const engine = {
+            isRunning: jest.fn(() => false),
+            getState: jest.fn(() => ({ running: false, generation: 0 })),
+            start: jest.fn((cmd, listeners) => {
+                listeners.onStart({ generation: 0 })
+                listeners.onGenerationStart({ generation: 1 })
+                listeners.onGenerationComplete({ generation: 1, winnerId: 'ai-0', durationTicks: 10, finalScores: {}, breakdown: {} })
+                listeners.onSnapshot({ chosenMacro: 'farm' })
+                listeners.onMatchEvent({ event: 'build:success' })
+                listeners.onStop({ lastGeneration: 1 })
+                listeners.onFinished({ lastGeneration: 1 })
+                listeners.onSave({ generation: 1 })
+                return { started: true }
+            }),
+            stop: jest.fn(),
+            saveBest: jest.fn(() => ({ saved: true, location: '/tmp' })),
+        }
+
+        const socket = createFakeSocket()
+        const logger = { log: jest.fn(), error: jest.fn() }
+        registerTrainingHandlers(socket, engine, broadcaster, logger)
+
+        socket.handlers['training:subscribe']()
+        socket.handlers['training:start']({ aiCount: 3 })
+        socket.handlers['training:save-best']()
+        socket.handlers['training:stop']()
+        socket.handlers['training:unsubscribe']()
+
+        expect(broadcaster.subscribe).toHaveBeenCalled()
+        expect(engine.start).toHaveBeenCalled()
+        expect(engine.stop).toHaveBeenCalled()
+        expect(engine.saveBest).toHaveBeenCalled()
+        expect(broadcastEvents.map(item => item.event)).toEqual(expect.arrayContaining([
+            'training:started',
+            'training:generation-start',
+            'training:generation-complete',
+            'training:decision-snapshot',
+            'training:match-event',
+            'training:stopped',
+            'training:finished',
+            'training:best-saved',
+        ]))
+    })
+
+    test('registerTrainingHandlers reports errors back through the socket', () => {
+        const broadcaster = {
+            subscribe: jest.fn(),
+            unsubscribe: jest.fn(),
+            broadcast: jest.fn(),
+            size: () => 0,
+        }
+        const engine = {
+            isRunning: () => false,
+            getState: () => ({ running: false }),
+            start: jest.fn(() => { throw new Error('start failed') }),
+            stop: jest.fn(() => { throw new Error('stop failed') }),
+            saveBest: jest.fn(() => { throw new Error('save failed') }),
+        }
+        const socket = createFakeSocket()
+        const logger = { log: jest.fn(), error: jest.fn() }
+        registerTrainingHandlers(socket, engine, broadcaster, logger)
+
+        socket.handlers['training:start']()
+        socket.handlers['training:stop']()
+        socket.handlers['training:save-best']()
+
+        expect(socket.emit).toHaveBeenCalledWith('training:error', { message: 'start failed' })
+        expect(socket.emit).toHaveBeenCalledWith('training:error', { message: 'stop failed' })
+        expect(socket.emit).toHaveBeenCalledWith('training:error', { message: 'save failed' })
+    })
+
+    test('training handlers propagate engine errors when start or save return error objects', () => {
+        const broadcaster = {
+            subscribe: jest.fn(),
+            unsubscribe: jest.fn(),
+            broadcast: jest.fn(),
+            size: () => 0,
+        }
+        const engine = {
+            isRunning: () => true,
+            getState: () => ({ running: true }),
+            start: jest.fn(() => ({ error: 'training already running' })),
+            stop: jest.fn(),
+            saveBest: jest.fn(() => ({ error: 'no parent to save' })),
+        }
+        const socket = createFakeSocket()
+
+        registerTrainingHandlers(socket, engine, broadcaster)
+        socket.handlers['training:start']({})
+        socket.handlers['training:save-best']()
+
+        expect(socket.emit).toHaveBeenCalledWith('training:error', { error: 'training already running' })
+        expect(socket.emit).toHaveBeenCalledWith('training:error', { error: 'no parent to save' })
+    })
+
+    test('disconnect unsubscribes from training broadcaster when present', () => {
+        const game = createFakeGame()
+        const socket = createFakeSocket()
+        const broadcaster = {
+            subscribe: jest.fn(),
+            unsubscribe: jest.fn(),
+            broadcast: jest.fn(),
+            size: () => 0,
+        }
+        const engine = {
+            isRunning: () => false,
+            getState: () => ({ running: false }),
+            start: jest.fn(),
+            stop: jest.fn(),
+            saveBest: jest.fn(),
+        }
+        const logger = { log: jest.fn(), error: jest.fn() }
+
+        registerSocketHandlers(socket, game, jest.fn(), logger, { trainingEngine: engine, trainingSockets: broadcaster })
+        socket.handlers.disconnect()
+
+        expect(broadcaster.unsubscribe).toHaveBeenCalledWith(socket)
+    })
 
 })

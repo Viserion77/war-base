@@ -1,0 +1,262 @@
+:root {
+    color-scheme: dark;
+    --bg-stone: #2d2620;
+    --bg-stone-light: #3d342c;
+    --accent-gold: #d4af37;
+    --accent-iron: #6b6b6b;
+    --text-parchment: #ece2c4;
+    --danger-blood: #a83232;
+    --ink: #241b14;
+    --paper: #f4ecd6;
+    --line: #8b7653;
+    --green: #4f8f5b;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg-stone);
+    color: var(--text-parchment);
+    font-family: "Cinzel", Georgia, "Times New Roman", serif;
+}
+
+.training-shell {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.training-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.4);
+    margin-bottom: 24px;
+}
+
+.training-header h1 {
+    margin: 0;
+    color: var(--accent-gold);
+    font-size: 28px;
+}
+
+.back-link {
+    color: var(--text-parchment);
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.back-link:hover {
+    color: var(--accent-gold);
+}
+
+.status-pill {
+    padding: 4px 14px;
+    border-radius: 999px;
+    background: var(--bg-stone-light);
+    border: 1px solid var(--line);
+    color: var(--text-parchment);
+    font-size: 13px;
+}
+
+.status-pill.running {
+    background: var(--green);
+    color: #fff;
+    border-color: var(--green);
+}
+
+.training-grid {
+    display: grid;
+    grid-template-columns: 260px 1fr 280px;
+    gap: 20px;
+}
+
+.panel {
+    background: var(--bg-stone-light);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 10px;
+    padding: 18px;
+}
+
+.panel h2 {
+    margin: 0 0 12px;
+    color: var(--accent-gold);
+    font-size: 18px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.panel h2 small {
+    font-size: 12px;
+    color: var(--text-parchment);
+    opacity: 0.7;
+}
+
+.field {
+    display: block;
+    margin-bottom: 12px;
+}
+
+.field span {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--text-parchment);
+}
+
+.field input[type="number"],
+.field input[type="range"] {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+}
+
+fieldset {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 0 0 12px;
+}
+
+fieldset legend {
+    color: var(--accent-gold);
+    font-size: 12px;
+    padding: 0 4px;
+}
+
+fieldset label {
+    display: block;
+    margin: 4px 0;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.actions button {
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.actions button:hover {
+    background: var(--accent-gold);
+}
+
+.actions button.primary {
+    background: var(--accent-gold);
+    border-color: var(--accent-gold);
+}
+
+.actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.network-panel canvas {
+    width: 100%;
+    height: auto;
+    background: #1a1612;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: block;
+}
+
+.legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-parchment);
+    opacity: 0.85;
+}
+
+.legend span::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 6px;
+    border-radius: 2px;
+    vertical-align: middle;
+}
+
+.legend-input::before {
+    background: #3aa6ff;
+}
+
+.legend-hidden::before {
+    background: #d4af37;
+}
+
+.legend-output::before {
+    background: #4f8f5b;
+}
+
+.subnet {
+    margin-top: 10px;
+    color: var(--accent-gold);
+    font-size: 14px;
+}
+
+.scoreboard,
+.history {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.scoreboard li,
+.history li {
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.15);
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.scoreboard li.winner {
+    background: rgba(79, 143, 91, 0.3);
+}
+
+.scoreboard li .player {
+    color: var(--text-parchment);
+    flex: 1;
+}
+
+.scoreboard li .score {
+    font-weight: bold;
+    color: var(--accent-gold);
+}
+
+.history li small {
+    color: var(--text-parchment);
+    opacity: 0.6;
+    font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+    .training-grid {
+        grid-template-columns: 1fr;
+    }
+}

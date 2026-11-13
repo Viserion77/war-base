@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 logs/
+ai/treinamento-evolutivo/checkpoints/
 
 .env
 .env.*

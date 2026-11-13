@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#2d2620">
+    <title>War Base - Treinamento Evolutivo</title>
+    <link rel="icon" href="favicon.ico">
+    <link rel="stylesheet" href="training.css">
+</head>
+
+<body>
+    <div class="training-shell">
+        <header class="training-header">
+            <h1>Treinamento Evolutivo</h1>
+            <a class="back-link" href="index.html">&larr; Voltar ao jogo</a>
+            <span class="status-pill" id="status-pill">Inativo</span>
+        </header>
+
+        <main class="training-grid">
+            <section class="panel config-panel">
+                <h2>Configuracao</h2>
+                <label class="field">
+                    <span>Numero de IAs <strong id="ai-count-label">4</strong></span>
+                    <input type="range" id="ai-count" min="2" max="8" value="4">
+                </label>
+                <fieldset>
+                    <legend>Criterio de vitoria</legend>
+                    <label><input type="radio" name="mode" value="survival" checked> Sobrevivencia</label>
+                    <label><input type="radio" name="mode" value="score"> Pontuacao</label>
+                </fieldset>
+                <label class="field">
+                    <span>Sigma (mutacao)</span>
+                    <input type="number" id="mutation-sigma" min="0.001" max="0.5" step="0.005" value="0.05">
+                </label>
+                <label class="field">
+                    <span>Max ticks por partida</span>
+                    <input type="number" id="max-ticks" min="50" max="20000" step="50" value="1000">
+                </label>
+                <label class="field">
+                    <span>Cooldown (ms) entre decisoes</span>
+                    <input type="number" id="cooldown-ms" min="0" max="2000" step="10" value="50">
+                </label>
+                <fieldset>
+                    <legend>Origem do pai inicial</legend>
+                    <label><input type="radio" name="initial-source" value="best" checked> Melhor salvo</label>
+                    <label><input type="radio" name="initial-source" value="supervised"> Treino supervisionado</label>
+                    <label><input type="radio" name="initial-source" value="random"> Aleatorio</label>
+                </fieldset>
+                <div class="actions">
+                    <button id="btn-start" type="button" class="primary">Iniciar</button>
+                    <button id="btn-stop" type="button">Parar</button>
+                    <button id="btn-save-best" type="button">Salvar como best</button>
+                </div>
+            </section>
+
+            <section class="panel network-panel">
+                <h2>Rede Neural <small id="generation-label">Geracao 0</small></h2>
+                <canvas id="network-canvas" width="900" height="600"></canvas>
+                <div class="legend">
+                    <span class="legend-input">Inputs (4344)</span>
+                    <span class="legend-hidden">Hidden (96)</span>
+                    <span class="legend-output">Macro-acoes (7)</span>
+                </div>
+                <p class="subnet" id="subnet-label">Sub-rede acionada: <strong>--</strong></p>
+            </section>
+
+            <section class="panel score-panel">
+                <h2>Placar</h2>
+                <ol id="scoreboard" class="scoreboard"></ol>
+                <h2>Historico</h2>
+                <ol id="history" class="history"></ol>
+            </section>
+        </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="training.js"></script>
+</body>
+
+</html>

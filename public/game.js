@@ -182,7 +182,20 @@ export default function createGame(options = {}) {
     const observers = []
     const debugObservers = []
     const aiAgent = options.aiAgent || null
+    const getAgentForPlayer = typeof options.getAgentForPlayer === 'function' ? options.getAgentForPlayer : null
     let ticker = null
+
+    function resolveAgentForPlayer(playerId) {
+        if (getAgentForPlayer) {
+            const agent = getAgentForPlayer(playerId)
+
+            if (agent) {
+                return agent
+            }
+        }
+
+        return aiAgent
+    }
 
     function start() {
         if (ticker) {
@@ -409,7 +422,7 @@ export default function createGame(options = {}) {
     }
 
     function enableAutoplay(room, player) {
-        if (!aiAgent) {
+        if (!aiAgent && !getAgentForPlayer) {
             addLog(room, player.gamerTag + ': AI is unavailable for autoplay.')
             return false
         }
@@ -1153,7 +1166,7 @@ function getNpcName(type) {
         }
 
         player.gold -= catalog.cost
-        createStructure(room, {
+        const structure = createStructure(room, {
             ownerId: player.playerId,
             type,
             x: command.x,
@@ -1161,6 +1174,13 @@ function getNpcName(type) {
         })
 
         addLog(room, `${player.gamerTag} built ${getStructureName(type)}.`)
+        debugLog(room, 'build:success', {
+            ownerId: player.playerId,
+            structureId: structure.structureId,
+            structureType: type,
+            x: structure.x,
+            y: structure.y,
+        })
         return true
     }
 
@@ -1301,6 +1321,10 @@ function getNpcName(type) {
         player.unlocked[recipe] = true
 
         addLog(room, `${player.gamerTag} researched ${getResearchName(recipe)}.`)
+        debugLog(room, 'research:success', {
+            ownerId: player.playerId,
+            researchType: recipe,
+        })
         return true
     }
 
@@ -1366,6 +1390,11 @@ function getNpcName(type) {
         }
 
         addLog(room, `${player.gamerTag} sent a ${getNpcName(npcType)}.`)
+        debugLog(room, 'unit:created', {
+            ownerId: player.playerId,
+            unitId,
+            unitType: npcType,
+        })
         return true
     }
 
@@ -1478,6 +1507,11 @@ function getNpcName(type) {
         player.activeCaptureUnitId = unitId
         player.avatarDeployed = false
         syncPlayerToCaptureUnit(player, unit)
+        debugLog(room, 'unit:created', {
+            ownerId: player.playerId,
+            unitId,
+            unitType: 'herald',
+        })
         return unit
     }
 
@@ -1859,16 +1893,6 @@ function getNpcName(type) {
     }
 
     function runAiPlayers(room, now) {
-        if (!aiAgent) {
-            return false
-        }
-
-        const decide = aiAgent.decide
-
-        if (typeof decide !== 'function') {
-            return false
-        }
-
         let changed = false
 
         for (const playerId of Object.keys(room.aiPlayers)) {
@@ -1880,7 +1904,13 @@ function getNpcName(type) {
                 continue
             }
 
-            const cooldownMs = aiAgent.cooldownMs ?? CONFIG.aiDecisionCooldownMs
+            const agent = resolveAgentForPlayer(playerId)
+
+            if (!agent || typeof agent.decide !== 'function') {
+                continue
+            }
+
+            const cooldownMs = agent.cooldownMs ?? CONFIG.aiDecisionCooldownMs
 
             if (now - memory.lastDecisionAt < cooldownMs) {
                 continue
@@ -1889,7 +1919,7 @@ function getNpcName(type) {
             memory.lastDecisionAt = now
 
             try {
-                const decision = decide({
+                const decision = agent.decide({
                     state: getPublicState(room.hostKey, playerId),
                     playerId,
                     now,
@@ -2358,12 +2388,24 @@ function getNpcName(type) {
                 return
             }
 
+            debugLog(room, 'unit:killed', {
+                killerOwnerId: attackerId || null,
+                victimOwnerId: unit.ownerId,
+                unitId: unit.unitId,
+                unitType: unit.type,
+            })
             delete room.units[unit.unitId]
         }
     }
 
     function knockOutCaptureUnit(room, unit, now, attackerId) {
         const player = room.players[unit.ownerId]
+        debugLog(room, 'unit:killed', {
+            killerOwnerId: attackerId || null,
+            victimOwnerId: unit.ownerId,
+            unitId: unit.unitId,
+            unitType: unit.type,
+        })
         delete room.units[unit.unitId]
 
         if (!player || !player.alive) {
@@ -2411,6 +2453,11 @@ function getNpcName(type) {
         structure.disabled = true
         structure.capture = null
         addLog(room, `${getStructureName(structure.type)} owned by ${getPlayerName(room, structure.ownerId)} was disabled.`)
+        debugLog(room, 'structure:destroyed', {
+            ownerId: structure.ownerId,
+            structureId: structure.structureId,
+            structureType: structure.type,
+        })
     }
 
     function removeStructure(room, structure) {
@@ -2420,6 +2467,11 @@ function getNpcName(type) {
         clearOrdersForStructure(room, structure.structureId)
         delete room.structures[structure.structureId]
         addLog(room, `${label} owned by ${ownerName} was destroyed.`)
+        debugLog(room, 'structure:destroyed', {
+            ownerId: structure.ownerId,
+            structureId: structure.structureId,
+            structureType: structure.type,
+        })
     }
 
     function clearOrdersForStructure(room, structureId) {
@@ -2460,6 +2512,11 @@ function getNpcName(type) {
             castle.integrity = 0
             castle.barrier = 0
             castle.disabled = true
+            debugLog(room, 'structure:destroyed', {
+                ownerId: player.playerId,
+                structureId: castle.structureId,
+                structureType: 'castle',
+            })
         }
 
         for (const structureId in room.structures) {

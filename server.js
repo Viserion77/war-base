@@ -6,6 +6,7 @@ import http from 'http'
 import { Server } from 'socket.io'
 import createGame from './public/game.js'
 import { createCompositeWarBaseAgent } from './ai/agente-composto/agente-composto.js'
+import { createTrainingEngine } from './ai/treinamento-evolutivo/motor-treino.js'
 
 export const DEFAULT_PORT = process.env.PORT || 4000
 
@@ -17,6 +18,10 @@ export function createWarBaseServer(options = {}) {
     const logsDirectory = options.logsDirectory || path.join(process.cwd(), 'logs', 'rooms')
     const game = options.game || createGame({
         aiAgent: options.aiAgent || createCompositeWarBaseAgent(options.aiOptions),
+    })
+    const trainingEngine = options.trainingEngine || createTrainingEngine({
+        scheduleNext: callback => setImmediate(callback),
+        ...(options.trainingDependencies || {}),
     })
     const createSockets = options.createSockets || (httpServer => new Server(httpServer))
     const app = express()
@@ -49,7 +54,12 @@ export function createWarBaseServer(options = {}) {
         })
     })
 
-    sockets.on('connection', socket => registerSocketHandlers(socket, game, appendRoomLog, logger))
+    const trainingSockets = createTrainingBroadcaster(sockets)
+
+    sockets.on('connection', socket => registerSocketHandlers(socket, game, appendRoomLog, logger, {
+        trainingEngine,
+        trainingSockets,
+    }))
 
     let shuttingDown = false
 
@@ -105,6 +115,30 @@ export function createWarBaseServer(options = {}) {
         listen,
         shutdown,
         appendRoomLog,
+        trainingEngine,
+        trainingSockets,
+    }
+}
+
+export function createTrainingBroadcaster(sockets) {
+    const subscribers = new Set()
+
+    return {
+        subscribe(socket) {
+            subscribers.add(socket)
+        },
+        unsubscribe(socket) {
+            subscribers.delete(socket)
+        },
+        broadcast(eventName, payload) {
+            for (const socket of subscribers) {
+                socket.emit(eventName, payload)
+            }
+        },
+        size() {
+            return subscribers.size
+        },
+        sockets,
     }
 }
 
@@ -131,9 +165,13 @@ export function emitGameCommand(command, sockets, appendRoomLog) {
     }
 }
 
-export function registerSocketHandlers(socket, game, appendRoomLog, logger = console) {
+export function registerSocketHandlers(socket, game, appendRoomLog, logger = console, training = null) {
     const playerId = socket.id
     logger.log(`> Player connected: ${playerId}`)
+
+    if (training && training.trainingEngine && training.trainingSockets) {
+        registerTrainingHandlers(socket, training.trainingEngine, training.trainingSockets, logger)
+    }
 
     socket.on('create-match', (command = {}) => {
         const result = game.createMatch({
@@ -243,7 +281,69 @@ export function registerSocketHandlers(socket, game, appendRoomLog, logger = con
         const hostKey = game.getHostKeyForPlayer(playerId)
         appendRoomLog(hostKey, 'socket:disconnect', { playerId })
         game.disconnectPlayer({ playerId })
+
+        if (training && training.trainingSockets) {
+            training.trainingSockets.unsubscribe(socket)
+        }
+
         logger.log(`> Player disconnected: ${playerId}`)
+    })
+}
+
+export function registerTrainingHandlers(socket, trainingEngine, trainingSockets, logger = console) {
+    const listeners = {
+        onStart: payload => trainingSockets.broadcast('training:started', payload),
+        onStop: payload => trainingSockets.broadcast('training:stopped', payload),
+        onFinished: payload => trainingSockets.broadcast('training:finished', payload),
+        onSave: payload => trainingSockets.broadcast('training:best-saved', payload),
+        onGenerationStart: payload => trainingSockets.broadcast('training:generation-start', payload),
+        onGenerationComplete: payload => trainingSockets.broadcast('training:generation-complete', payload),
+        onSnapshot: payload => trainingSockets.broadcast('training:decision-snapshot', payload),
+        onMatchEvent: payload => trainingSockets.broadcast('training:match-event', payload),
+    }
+
+    socket.on('training:subscribe', () => {
+        trainingSockets.subscribe(socket)
+        socket.emit('training:state', { running: trainingEngine.isRunning(), state: trainingEngine.getState() })
+    })
+
+    socket.on('training:unsubscribe', () => {
+        trainingSockets.unsubscribe(socket)
+    })
+
+    socket.on('training:start', (command = {}) => {
+        try {
+            const result = trainingEngine.start(command, listeners)
+
+            if (result.error) {
+                socket.emit('training:error', result)
+            }
+        } catch (error) {
+            logger.error('> training start failed', error)
+            socket.emit('training:error', { message: error.message })
+        }
+    })
+
+    socket.on('training:stop', () => {
+        try {
+            trainingEngine.stop(listeners)
+        } catch (error) {
+            logger.error('> training stop failed', error)
+            socket.emit('training:error', { message: error.message })
+        }
+    })
+
+    socket.on('training:save-best', () => {
+        try {
+            const result = trainingEngine.saveBest(listeners)
+
+            if (result.error) {
+                socket.emit('training:error', result)
+            }
+        } catch (error) {
+            logger.error('> training save-best failed', error)
+            socket.emit('training:error', { message: error.message })
+        }
     })
 }
 
